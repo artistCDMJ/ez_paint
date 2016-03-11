@@ -1,3 +1,27 @@
+# -*- coding: utf8 -*-
+# python
+# ##### BEGIN GPL LICENSE BLOCK #####
+#
+#  This program is free software; you can redistribute it and/or
+#  modify it under the terms of the GNU General Public License
+#  as published by the Free Software Foundation; either version 2
+#  of the License, or (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to the Free Software
+#  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+#  MA 02110-1301, USA.
+#
+# ##### END GPL LICENSE BLOCK #####
+
+# <pep8 compliant>
+
+
 bl_info = {
     'name': 'Texture Paint plus',
     'author': 'Bart Crouch, scorpion81, Spirou4D',
@@ -486,6 +510,8 @@ class BrushPopup(bpy.types.Operator):
         row.prop(brush, "stroke_method", text="")
         if brush.use_airbrush:
             row.prop(brush, "rate", text="Rate", slider=True)
+        if brush.brush_capabilities.has_smooth_stroke:
+                col.prop(brush, "use_smooth_stroke")
 
         row = col.row(align=True)                            #new line
         if (unified.use_unified_size):
