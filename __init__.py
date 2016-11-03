@@ -1292,7 +1292,7 @@ def register():
     kmi = km.keymap_items.new("paint.sample_color_custom", 'RIGHTMOUSE', 'PRESS', oskey=True)
     kmi = km.keymap_items.new("paint.grid_texture", 'G', 'PRESS')
     kmi = km.keymap_items.new("paint.save_image", 'S', 'PRESS', alt=True) #?
-    kmi = km.keymap_items.new("view3d.brush_popup", 'W', 'PRESS')#ok
+    kmi = km.keymap_items.new("view3d.brush_popup", 'W', 'PRESS', alt=True)#ok
     kmi = km.keymap_items.new("slots.projectpaint", 'W', 'PRESS', shift=True)#ok
 
     # add 3DView keymap entries
