@@ -24,9 +24,9 @@
 
 bl_info = {
     'name': 'Texture Paint plus',
-    'author': 'Bart Crouch, scorpion81, Spirou4D',
-    'version': (2, 00),
-    'blender': (2, 73, 0),
+    'author': 'Bart Crouch, scorpion81, Spirou4D, CDMJ',
+    'version': (2, 10),
+    'blender': (2, 78, 0),
     'location': 'Paint editor > 3D view',
     'warning': '',
     'description': 'Several improvements for Texture Paint mode',
@@ -1091,7 +1091,43 @@ class ToggleUVSelectSync(bpy.types.Operator):
 
         return {'FINISHED'}
 
+class SelectVertgroup(bpy.types.Operator):
+    """Select Vertgroup"""
+    bl_idname = "object.select_vgroup" 
+                                     
+     
+    bl_label = "Select VGroup"
+    bl_options = { 'REGISTER', 'UNDO' }
+    
+    def execute(self, context):
+    
+        bpy.ops.object.editmode_toggle()#toggle editmode
+        bpy.ops.object.vertex_group_select()#select current active vgroup
+        bpy.ops.object.editmode_toggle()#toggle editmode
+        bpy.ops.paint.texture_paint_toggle()#Texpaint
+        bpy.context.object.data.use_paint_mask = True #set face select masking on in case we forgot
 
+
+        return {'FINISHED'}
+
+class DeselectVertgroup(bpy.types.Operator):
+    """Deselect Vertgroup"""
+    bl_idname = "object.deselect_vgroup" 
+                                     
+     
+    bl_label = "Deselect VGroup"
+    bl_options = { 'REGISTER', 'UNDO' }
+    
+    def execute(self, context):
+    
+        bpy.ops.object.editmode_toggle()#toggle editmode
+        bpy.ops.object.vertex_group_deselect()#select current active vgroup
+        bpy.ops.object.editmode_toggle()#toggle editmode
+        bpy.ops.paint.texture_paint_toggle()#Texpaint
+        bpy.context.object.data.use_paint_mask = True #set face select masking on in case we forgot
+
+
+        return {'FINISHED'}
 
 ##########################################
 #                                        #
@@ -1101,7 +1137,7 @@ class ToggleUVSelectSync(bpy.types.Operator):
 
 class Slots_projectpaint(bpy.types.Operator):
     bl_idname = "slots.projectpaint"
-    bl_label = "Slots"
+    bl_label = "Slots & VGroups"
     bl_options = {'REGISTER', 'UNDO'}
 
     def check(self, context):
@@ -1116,6 +1152,54 @@ class Slots_projectpaint(bpy.types.Operator):
     def draw(self, context):
         settings = context.tool_settings.image_paint
         ob = context.active_object
+        layout = self.layout
+        col = layout.column()
+        
+        col.separator()
+        col.operator("image.save_dirty", text="Save All Images")
+        
+        layout = self.layout
+
+        ob = context.object
+        group = ob.vertex_groups.active
+
+        rows = 2
+        if group:
+            rows = 4
+
+        row = layout.row()
+        row.template_list("MESH_UL_vgroups", "", ob, "vertex_groups", ob.vertex_groups, "active_index", rows=rows)
+
+        col = row.column(align=True)
+        col.operator("object.vertex_group_add", icon='ZOOMIN', text="")
+        col.operator("object.vertex_group_remove", icon='ZOOMOUT', text="").all = False
+        col.menu("MESH_MT_vertex_group_specials", icon='DOWNARROW_HLT', text="")
+        
+                
+        if group:
+            col.separator()
+            col.operator("object.vertex_group_move", icon='TRIA_UP', text="").direction = 'UP'
+            col.operator("object.vertex_group_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
+
+        if ob.vertex_groups and (ob.mode == 'EDIT' or (ob.mode == 'WEIGHT_PAINT' and ob.type == 'MESH' and ob.data.use_paint_mask_vertex)):
+            row = layout.row()
+
+            sub = row.row(align=True)
+            sub.operator("object.vertex_group_assign", text="Assign")
+            sub.operator("object.vertex_group_remove_from", text="Remove")
+
+            sub = row.row(align=True)
+            sub.operator("object.vertex_group_select", text="Select")
+            sub.operator("object.vertex_group_deselect", text="Deselect")
+        
+                
+        layout.prop(context.tool_settings, "vertex_group_weight", text="Weight")
+            
+        #row = layout.row()
+        row = layout.row(align=True)
+        row.operator("object.select_vgroup", text = "Select VGroup", icon = 'ROTACTIVE')
+        #row = layout.column()
+        row.operator("object.deselect_vgroup", text = "Deselect VGroup", icon = 'ROTACTIVE')
 
         layout = self.layout
         col = layout.column()
@@ -1165,9 +1249,7 @@ class Slots_projectpaint(bpy.types.Operator):
             col.label("UV Map")
             col.menu("VIEW3D_MT_tools_projectpaint_uvlayer", text=uv_text, translate=False)
 
-        col.separator()
-        col.operator("image.save_dirty", text="Save All Images")
-
+    
 
     def invoke(self, context,event):
         if context.space_data.type == 'IMAGE_EDITOR':
@@ -1224,7 +1306,9 @@ classes =   [AddDefaultImage,
             InitPaintBlend,
             ToggleUVSelectSync,
             Slots_projectpaint,
-            TexturePaintPlusProps]
+            TexturePaintPlusProps,
+            SelectVertgroup,
+            DeselectVertgroup]
 
 
 def menu_func(self, context):
@@ -1332,6 +1416,7 @@ def register():
     bpy.types.VIEW3D_MT_edit_mesh.prepend(menu_func)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.append(menu_mesh_select_mode)
     bpy.types.VIEW3D_MT_snap.append(menu_snap)
+    
 
 
 def unregister():
@@ -1339,6 +1424,8 @@ def unregister():
     bpy.types.VIEW3D_MT_snap.remove(menu_snap)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.remove(menu_mesh_select_mode)
     bpy.types.VIEW3D_MT_edit_mesh.remove(menu_func)
+    
+
 
     # ImagePaint keymap entries
     km = bpy.context.window_manager.keyconfigs.default.keymaps['Image Paint']
