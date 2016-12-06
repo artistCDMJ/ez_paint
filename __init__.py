@@ -24,8 +24,8 @@
 
 bl_info = {
     'name': 'Texture Paint plus',
-    'author': 'Bart Crouch, scorpion81, Spirou4D',
-    'version': (2, 00),
+    'author': 'Bart Crouch, scorpion81, Spirou4D, CDMJ',
+    'version': (2, 10),
     'blender': (2, 73, 0),
     'location': 'Paint editor > 3D view',
     'warning': '',
@@ -1590,7 +1590,7 @@ def register():
     kmi = km.keymap_items.new("paint.sample_color_custom", 'RIGHTMOUSE', 'PRESS', oskey=True)
     kmi = km.keymap_items.new("paint.grid_texture", 'G', 'PRESS')
     kmi = km.keymap_items.new("paint.save_image", 'S', 'PRESS', alt=True) #?
-    kmi = km.keymap_items.new("view3d.brush_popup", 'W', 'PRESS')#ok
+    kmi = km.keymap_items.new("view3d.brush_popup", 'W', 'PRESS', alt=True, ctrl=True)#ok
     kmi = km.keymap_items.new("view3d.texture_popup", 'W', 'PRESS', alt=True)#ok
     kmi = km.keymap_items.new("slots.projectpaint", 'W', 'PRESS', shift=True)#ok
 
@@ -1687,6 +1687,5 @@ def unregister():
         del bpy.types.WindowManager.tpp
     except:
         pass
-
 if __name__ == "__main__":
     register()
