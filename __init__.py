@@ -24,9 +24,9 @@
 
 bl_info = {
     'name': 'Texture Paint plus',
-    'author': 'Bart Crouch, scorpion81, Spirou4D, CDMJ',
-    'version': (2, 10),
-    'blender': (2, 78, 0),
+    'author': 'Bart Crouch, scorpion81, Spirou4D',
+    'version': (2, 00),
+    'blender': (2, 73, 0),
     'location': 'Paint editor > 3D view',
     'warning': '',
     'description': 'Several improvements for Texture Paint mode',
@@ -401,13 +401,15 @@ class AddDefaultImage(bpy.types.Operator):
     def invoke(self, context, event):
         ob = context.active_object
         mat = bpy.data.materials.new("default")
+
+        #Add texture to the mat
         tex = bpy.data.textures.new("default", 'IMAGE')
         img = bpy.data.images.new("default", 1024, 1024, alpha=True)
         ts = mat.texture_slots.add()
         tex.image = img
         ts.texture = tex
-        ob.data.materials.append(mat)
 
+        ob.data.materials.append(mat)
         return {'FINISHED'}
 
 
@@ -438,6 +440,14 @@ class BrushPopup(bpy.types.Operator):
 
     def check(self, context):
         return True
+
+    @classmethod
+    def poll(self, context):
+        obj =  context.active_object
+        if obj is not None:
+            A = context.active_object.type == 'MESH'
+            B = context.mode == 'PAINT_TEXTURE'
+            return A and B
 
     def invoke(self, context, event):
         if context.space_data.type == 'IMAGE_EDITOR':
@@ -564,7 +574,206 @@ class BrushPopup(bpy.types.Operator):
         col.template_ID(settings, "palette", new="palette.new")
 
 
+class TexturePopup(bpy.types.Operator):
+    bl_idname = "view3d.texture_popup"
+    bl_label = "Textures and Mask Textures settings"
+    bl_options = {'REGISTER', 'UNDO'}
 
+    def check(self, context):
+        return True
+
+    @classmethod
+    def poll(self, context):
+        obj =  context.active_object
+        if obj is not None:
+            A = obj.type == 'MESH'
+            B = context.mode == 'PAINT_TEXTURE'
+            return A and B
+
+    def draw(self, context):
+        # Init values
+        toolsettings = context.tool_settings
+        brush = toolsettings.image_paint.brush
+        tex_slot = brush.texture_slot
+        mask_tex_slot = brush.mask_texture_slot
+        sculpt = context.mode == 'SCULPT'
+        unified = toolsettings.unified_paint_settings
+        settings = toolsettings.image_paint
+
+        # textures panel
+        layout = self.layout
+        col = layout.column()                                   #TEXTURES
+        col.template_ID_preview(brush, "texture", new="texture.new", \
+                                                            rows=3, cols=8)
+        layout.label(text="Brush Mapping:")
+
+        # texture_map_mode
+        if sculpt:
+            layout.row().prop(tex_slot, "map_mode", text="")
+            layout.separator()
+        else:
+            layout.row().prop(tex_slot, "tex_paint_map_mode", text="")
+            layout.separator()
+
+        if tex_slot.map_mode == 'STENCIL':
+            if brush.texture and brush.texture.type == 'IMAGE':
+                layout.operator("brush.stencil_fit_image_aspect")
+            layout.operator("brush.stencil_reset_transform")
+
+        # angle and texture_angle_source
+        if tex_slot.has_texture_angle:
+            col = layout.column()
+            col.label(text="Angle:")
+            col.prop(tex_slot, "angle", text="")
+            if tex_slot.has_texture_angle_source:
+                col.prop(tex_slot, "use_rake", text="Rake")
+
+                if brush.brush_capabilities.has_random_texture_angle and tex_slot.has_random_texture_angle:
+                    if sculpt:
+                        if brush.sculpt_capabilities.has_random_texture_angle:
+                            col.prop(tex_slot, "use_random", text="Random")
+                            if tex_slot.use_random:
+                                col.prop(tex_slot, "random_angle", text="")
+                    else:
+                        col.prop(tex_slot, "use_random", text="Random")
+                        if tex_slot.use_random:
+                            col.prop(tex_slot, "random_angle", text="")
+
+        # scale and offset
+        split = layout.split()
+        split.prop(tex_slot, "offset")
+        split.prop(tex_slot, "scale")
+        if sculpt:
+            # texture_sample_bias
+            col = layout.column(align=True)
+            col.label(text="Sample Bias:")
+            col.prop(brush, "texture_sample_bias", slider=True, text="")
+
+        row = layout.row()
+        row.operator(MakeBrushImageTexture.bl_idname)
+        layout.separator() #=================================================
+
+
+        col = layout.column()                                 #MASK TEXTURE
+        col.template_ID_preview(brush, "mask_texture", new="texture.new", \
+                                                            rows=3, cols=8)
+        layout.label(text="Mask Mapping:")
+        # map_mode
+        layout.row().prop(mask_tex_slot, "mask_map_mode", text="")
+        layout.separator()
+
+        if mask_tex_slot.map_mode == 'STENCIL':
+            if brush.mask_texture and brush.mask_texture.type == 'IMAGE':
+                layout.operator("brush.stencil_fit_image_aspect").mask = True
+            layout.operator("brush.stencil_reset_transform").mask = True
+
+        col = layout.column()
+        col.prop(brush, "use_pressure_masking", text="")
+        # angle and texture_angle_source
+        if mask_tex_slot.has_texture_angle:
+            col = layout.column()
+            col.label(text="Angle:")
+            col.prop(mask_tex_slot, "angle", text="")
+            if mask_tex_slot.has_texture_angle_source:
+                col.prop(mask_tex_slot, "use_rake", text="Rake")
+
+                if brush.brush_capabilities.has_random_texture_angle and mask_tex_slot.has_random_texture_angle:
+                    col.prop(mask_tex_slot, "use_random", text="Random")
+                    if mask_tex_slot.use_random:
+                        col.prop(mask_tex_slot, "random_angle", text="")
+
+        # scale and offset
+        split = layout.split()
+        split.prop(mask_tex_slot, "offset")
+        split.prop(mask_tex_slot, "scale")
+        row = layout.row()
+        row.operator(MakeBrushImageTextureMask.bl_idname)
+
+
+    def invoke(self, context, event):
+        if context.space_data.type == 'IMAGE_EDITOR':
+            context.space_data.mode = 'PAINT'
+        return context.window_manager.\
+                                invoke_props_dialog(self, width=160)
+
+    def execute(self, context):
+        return {'FINISHED'}
+
+
+
+class MakeBrushImageTexture(bpy.types.Operator):
+    bl_label = "New Texture from Image"
+    bl_idname = "gizmo.image_texture"
+
+    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self,context):
+        tex = bpy.data.textures.new("ImageTexture",'NONE')
+        tex.use_nodes = True
+        remove = tex.node_tree.nodes[1]
+        tex.node_tree.nodes.remove(remove)
+        tex.node_tree.nodes.new("TextureNodeImage")
+        tex.node_tree.links.new(tex.node_tree.nodes[0].inputs[0],tex.node_tree.nodes[1].outputs[0])
+        i = bpy.data.images.load(self.filepath)
+        tex.node_tree.nodes[1].image = i
+        bpy.context.tool_settings.image_paint.brush.texture = tex
+
+        tex.node_tree.nodes[1].location = [0,50]
+        tex.node_tree.nodes[0].location = [200,50]
+
+        if bpy.context.mode == 'SCULPT':
+            bpy.context.tool_settings.sculpt.brush.texture = tex
+        elif bpy.context.mode == 'PAINT_VERTEX':
+            bpy.context.tool_settings.vertex_paint.brush.texture = tex
+        #elif bpy.context.mode == 'PAINT_WEIGHT':
+        #   bpy.context.tool_settings.weight_paint.brush.texture = tex
+        elif bpy.context.mode == 'PAINT_TEXTURE':
+            bpy.context.tool_settings.image_paint.brush.texture = tex
+
+        return set()
+
+
+class MakeBrushImageTextureMask(bpy.types.Operator):
+    bl_label = "New Mask Texture from Image"
+    bl_idname = "gizmo.image_texture_mask"
+
+    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self,context):
+        tex = bpy.data.textures.new("ImageTextureMask",'NONE')
+        tex.use_nodes = True
+        remove = tex.node_tree.nodes[1]
+        tex.node_tree.nodes.remove(remove)
+        tex.node_tree.nodes.new("TextureNodeImage")
+        tex.node_tree.nodes.new("TextureNodeRGBToBW")
+
+
+        tex.node_tree.links.new(tex.node_tree.nodes[0].inputs[0],tex.node_tree.nodes[2].outputs[0])
+        tex.node_tree.links.new(tex.node_tree.nodes[2].inputs[0],tex.node_tree.nodes[1].outputs[0])
+        tex.node_tree.nodes[1].location = [0,50]
+        tex.node_tree.nodes[2].location = [200,50]
+        tex.node_tree.nodes[0].location = [400,50]
+
+
+        i = bpy.data.images.load(self.filepath)
+        tex.node_tree.nodes[1].image = i
+        #if bpy.context.mode == 'SCULPT':
+        #   bpy.context.tool_settings.sculpt.brush.mask_texture = tex
+        #elif bpy.context.mode == 'PAINT_VERTEX':
+        #   bpy.context.tool_settings.vertex_paint.brush.mask_texture = tex
+        #elif bpy.context.mode == 'PAINT_WEIGHT':
+        #   bpy.context.tool_settings.weight_paint.brush.mask_texture = tex
+        if bpy.context.mode == 'PAINT_TEXTURE':
+            bpy.context.tool_settings.image_paint.brush.mask_texture = tex
+        return set()
 
 class ChangeSelection(bpy.types.Operator):
     '''Select more or less vertices/edges/faces, connected to the original selection'''
@@ -1129,6 +1338,8 @@ class DeselectVertgroup(bpy.types.Operator):
 
         return {'FINISHED'}
 
+
+
 ##########################################
 #                                        #
 # User interface                         #
@@ -1289,6 +1500,9 @@ class TexturePaintPlusProps(bpy.types.PropertyGroup):
 classes =   [AddDefaultImage,
             AutoMergeUV,
             BrushPopup,
+            TexturePopup,
+            MakeBrushImageTexture,
+            MakeBrushImageTextureMask,
             ChangeSelection,
             DefaultMaterial,
             GridTexture,
@@ -1307,8 +1521,8 @@ classes =   [AddDefaultImage,
             ToggleUVSelectSync,
             Slots_projectpaint,
             TexturePaintPlusProps,
-            SelectVertgroup,
-            DeselectVertgroup]
+            DeselectVertgroup,
+            SelectVertgroup]
 
 
 def menu_func(self, context):
@@ -1363,7 +1577,7 @@ def register():
     for c in classes:
         bpy.utils.register_class(c)
     bpy.types.WindowManager.tpp = bpy.props.PointerProperty(\
-        type = TexturePaintPlusProps)
+                                                type = TexturePaintPlusProps)
 
     # add ImagePaint keymap entries
     km = bpy.context.window_manager.keyconfigs.default.keymaps['Image Paint']
@@ -1376,7 +1590,8 @@ def register():
     kmi = km.keymap_items.new("paint.sample_color_custom", 'RIGHTMOUSE', 'PRESS', oskey=True)
     kmi = km.keymap_items.new("paint.grid_texture", 'G', 'PRESS')
     kmi = km.keymap_items.new("paint.save_image", 'S', 'PRESS', alt=True) #?
-    kmi = km.keymap_items.new("view3d.brush_popup", 'W', 'PRESS', alt=True)#ok
+    kmi = km.keymap_items.new("view3d.brush_popup", 'W', 'PRESS')#ok
+    kmi = km.keymap_items.new("view3d.texture_popup", 'W', 'PRESS', alt=True)#ok
     kmi = km.keymap_items.new("slots.projectpaint", 'W', 'PRESS', shift=True)#ok
 
     # add 3DView keymap entries
@@ -1416,7 +1631,6 @@ def register():
     bpy.types.VIEW3D_MT_edit_mesh.prepend(menu_func)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.append(menu_mesh_select_mode)
     bpy.types.VIEW3D_MT_snap.append(menu_snap)
-    
 
 
 def unregister():
@@ -1424,13 +1638,11 @@ def unregister():
     bpy.types.VIEW3D_MT_snap.remove(menu_snap)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.remove(menu_mesh_select_mode)
     bpy.types.VIEW3D_MT_edit_mesh.remove(menu_func)
-    
-
 
     # ImagePaint keymap entries
     km = bpy.context.window_manager.keyconfigs.default.keymaps['Image Paint']
     for kmi in km.keymap_items:
-        if kmi.idname in ["view3d.brush_popup", "paint.toggle_alpha_mode",  "paint.sample_color_custom",
+        if kmi.idname in ["view3d.brush_popup", "view3d.texture_popup", "paint.toggle_alpha_mode",  "paint.sample_color_custom",
         "paint.toggle_add_multiply", "paint.toggle_color_soft_light_screen", "paint.init_blend_mode", "paint.grid_texture", "paint.reload_image", "paint.save_image"]:
             km.keymap_items.remove(kmi)
         elif kmi.idname == "wm.context_toggle":
