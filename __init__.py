@@ -703,23 +703,6 @@ class BrushPopup(Operator):
             col.prop(brush, "blend", text="Blend")
 
         col = layout.column()
-        
-        layout = self.layout
-
-        settings = self.paint_settings(context)
-
-        brush = settings.brush
-
-        layout.template_curve_mapping(brush, "curve", brush=True)
-
-        col = layout.column(align=True)
-        row = col.row(align=True)
-        row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
-        row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
-        row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
-        row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
-        row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
-        row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
 
         # use_accumulate
         if capabilities.has_accumulate:
