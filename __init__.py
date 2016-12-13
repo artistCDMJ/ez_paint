@@ -25,7 +25,7 @@
 bl_info = {
     'name': 'Texture Paint plus',
     'author': 'Bart Crouch, scorpion81, Spirou4D, CDMJ',
-    'version': (2, 10),
+    'version': (2, 20),
     'blender': (2, 73, 0),
     'location': 'Paint editor > 3D view',
     'warning': '',
@@ -591,7 +591,7 @@ class BrushPopup(Operator):
         obj =  context.active_object
         if obj is not None:
             A = context.active_object.type == 'MESH'
-            B = context.mode == 'PAINT_TEXTURE'
+            B = context.mode in {'PAINT_TEXTURE','PAINT_VERTEX','PAINT_WEIGHT'}
             return A and B
 
 
@@ -723,8 +723,87 @@ class BrushPopup(Operator):
         toolsettings = context.tool_settings
         settings = self.paint_settings(context)
         brush = settings.brush
+        ipaint = toolsettings.image_paint
 
         layout = self.layout
+
+        # Stroke mode
+        col = layout.column()
+        col.prop(brush, "stroke_method", text="")
+
+        if brush.use_anchor:
+            col.separator()
+            col.prop(brush, "use_edge_to_edge", "Edge To Edge")
+
+        if brush.use_airbrush:
+            col.separator()
+            col.prop(brush, "rate", text="Rate", slider=True)
+
+        if brush.use_space:
+            col.separator()
+            row = col.row(align=True)
+            row.prop(brush, "spacing", text="Spacing")
+            row.prop(brush, "use_pressure_spacing", toggle=True, text="")
+
+        if brush.use_line or brush.use_curve:
+            col.separator()
+            row = col.row(align=True)
+            row.prop(brush, "spacing", text="Spacing")
+
+        if brush.use_curve:
+            col.separator()
+            col.template_ID(brush, "paint_curve", new="paintcurve.new")
+            col.operator("paintcurve.draw")
+
+        else:
+            col.separator()
+
+            row = col.row(align=True)
+            row.prop(brush, "use_relative_jitter", icon_only=True)
+            if brush.use_relative_jitter:
+                row.prop(brush, "jitter", slider=True)
+            else:
+                row.prop(brush, "jitter_absolute")
+            row.prop(brush, "use_pressure_jitter", toggle=True, text="")
+
+            col = layout.column()
+            col.separator()
+
+            if brush.brush_capabilities.has_smooth_stroke:
+                col.prop(brush, "use_smooth_stroke")
+
+                sub = col.column()
+                sub.active = brush.use_smooth_stroke
+                sub.prop(brush, "smooth_stroke_radius", text="Radius", slider=True)
+                sub.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
+
+        layout.prop(settings, "input_samples")
+
+        # Curve stroke
+        col = layout.column(align=True)
+         
+        settings = self.paint_settings(context)
+ 
+        brush = settings.brush
+ 
+        layout.template_curve_mapping(brush, "curve", brush=True)
+ 
+        col = layout.column(align=True)
+        row = col.row(align=True)
+        row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
+        row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
+        row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
+        row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
+        row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
+        row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
+
+
+        # Symetries mode
+        col = layout.column(align=True)
+        row = col.row(align=True)
+        row.prop(ipaint, "use_symmetry_x", text="X", toggle=True)
+        row.prop(ipaint, "use_symmetry_y", text="Y", toggle=True)
+        row.prop(ipaint, "use_symmetry_z", text="Z", toggle=True)
 
         # imagepaint tool operate buttons
         col = layout.split().column()
@@ -786,6 +865,7 @@ class BrushPopup(Operator):
 
             col.separator()
             col.template_ID(settings, "palette", new="palette.new")
+
 
 
     def invoke(self, context, event):
@@ -918,6 +998,43 @@ class TexturePopup(Operator):
     def execute(self, context):
         return {'FINISHED'}
 
+class SelectVertgroup(bpy.types.Operator):
+    """Select Vertgroup"""
+    bl_idname = "object.select_vgroup"
+
+
+    bl_label = "Select VGroup"
+    bl_options = { 'REGISTER', 'UNDO' }
+
+    def execute(self, context):
+
+        bpy.ops.object.editmode_toggle()#toggle editmode
+        bpy.ops.object.vertex_group_select()#select current active vgroup
+        bpy.ops.object.editmode_toggle()#toggle editmode
+        bpy.ops.paint.texture_paint_toggle()#Texpaint
+        bpy.context.object.data.use_paint_mask = True #set face select masking on in case we forgot
+
+
+        return {'FINISHED'}
+
+class DeselectVertgroup(bpy.types.Operator):
+    """Deselect Vertgroup"""
+    bl_idname = "object.deselect_vgroup"
+
+
+    bl_label = "Deselect VGroup"
+    bl_options = { 'REGISTER', 'UNDO' }
+
+    def execute(self, context):
+
+        bpy.ops.object.editmode_toggle()#toggle editmode
+        bpy.ops.object.vertex_group_deselect()#select current active vgroup
+        bpy.ops.object.editmode_toggle()#toggle editmode
+        bpy.ops.paint.texture_paint_toggle()#Texpaint
+        bpy.context.object.data.use_paint_mask = True #set face select masking on in case we forgot
+
+
+        return {'FINISHED'}
 
 class Slots_projectpaint(Operator):
     bl_idname = "slots.projectpaint"
@@ -1540,44 +1657,6 @@ class ToggleImagePaint(bpy.types.Operator):
 
         return {'FINISHED'}
 
-class SelectVertgroup(bpy.types.Operator):
-    """Select Vertgroup"""
-    bl_idname = "object.select_vgroup"
-
-
-    bl_label = "Select VGroup"
-    bl_options = { 'REGISTER', 'UNDO' }
-
-    def execute(self, context):
-
-        bpy.ops.object.editmode_toggle()#toggle editmode
-        bpy.ops.object.vertex_group_select()#select current active vgroup
-        bpy.ops.object.editmode_toggle()#toggle editmode
-        bpy.ops.paint.texture_paint_toggle()#Texpaint
-        bpy.context.object.data.use_paint_mask = True #set face select masking on in case we forgot
-
-
-        return {'FINISHED'}
-
-class DeselectVertgroup(bpy.types.Operator):
-    """Deselect Vertgroup"""
-    bl_idname = "object.deselect_vgroup"
-
-
-    bl_label = "Deselect VGroup"
-    bl_options = { 'REGISTER', 'UNDO' }
-
-    def execute(self, context):
-
-        bpy.ops.object.editmode_toggle()#toggle editmode
-        bpy.ops.object.vertex_group_deselect()#select current active vgroup
-        bpy.ops.object.editmode_toggle()#toggle editmode
-        bpy.ops.paint.texture_paint_toggle()#Texpaint
-        bpy.context.object.data.use_paint_mask = True #set face select masking on in case we forgot
-
-
-        return {'FINISHED'}
-
 
 class InitPaintBlend(bpy.types.Operator):
     '''Toggle between Add Alpha and Erase Alpha blend modes'''
@@ -1677,9 +1756,8 @@ classes =   [AddDefaultImage,                #add defauft paint image (Shift ALt
             ToggleAlphaMode,                #Toggle AddAlpha/EraseAlpha paint mode (A) PAINT
             ToggleImagePaint,               #Cyclic image/paint/mask  mode (B) IMAGE_EDITOR
             InitPaintBlend,                 #Reinit mix paint mode (Alt D) PAINT
-            SelectVertgroup,                #Select active vertex group from Slots/VGroup panel
-            DeselectVertgroup,              #Deselect active vertex group in vgroup popup 
-
+            SelectVertgroup,                #Select active vertex group in Texture Paint mode
+            DeselectVertgroup,              #Deselect active vertex group in Texture paint mode
             TexturePaintPlusProps]          #toutes les variables de l'addon
 
 
@@ -1745,7 +1823,7 @@ def register():
     kmi = km.keymap_items.new("paint.sample_color_custom", 'RIGHTMOUSE', 'PRESS', oskey=True)
     kmi = km.keymap_items.new("paint.grid_texture", 'G', 'PRESS')
     kmi = km.keymap_items.new("paint.save_image", 'S', 'PRESS', alt=True) #?
-    kmi = km.keymap_items.new("view3d.brush_popup", 'W', 'PRESS', alt=True, ctrl=True)#ok
+    kmi = km.keymap_items.new("view3d.brush_popup", 'W', 'PRESS')#ok
     kmi = km.keymap_items.new("view3d.texture_popup", 'W', 'PRESS', alt=True)#ok
     kmi = km.keymap_items.new("slots.projectpaint", 'W', 'PRESS', shift=True)#ok
 
