@@ -24,191 +24,39 @@
 
 bl_info = {
     'name': 'Texture Paint plus',
-    'author': 'Bart Crouch, scorpion81, Spirou4D, CDMJ',
-    'version': (2, 20),
-    'blender': (2, 73, 0),
+    'author': 'Bart Crouch, scorpion81, Spirou4D',
+    'version': (3, 00),
+    'blender': (2, 78, 0),
     'location': 'Paint editor > 3D view',
     'warning': '',
-    'description': 'Several improvements for Texture Paint mode',
+    'description': 'Several improvements for PAINT MODE',
     'wiki_url': '',
     'tracker_url': '',
     'category': 'Paint'}
 
 
-import bgl
-import blf
-import bpy
-import mathutils
-import os
-import time
-import copy
-import math
-from bpy_extras.io_utils import ImportHelper
+import bgl, blf, bpy, mathutils, os, time, copy, math
+
 from bpy.types import Operator, Menu, Panel, UIList
+from bpy_extras.io_utils import ImportHelper
+ 
 
 #################################################
 #                                               #
-# Functions          for                        #
-# '''Sync selection from uv-editor to 3d-view'''#
+#                  Functions                    #
+#                                               #
 #################################################
 
-
-# draw in 3d-view =>OK!
-def draw_callback(self, context):
-    r, g, b = context.tool_settings.image_paint.brush.cursor_color_add
-    #x0, y0, x1, y1 = context.window_manager["straight_line"]
-    start = self.stroke[0]
-    end = self.stroke[-1]
-
-    x0 = start["mouse"][0]
-    y0 = start["mouse"][1]
-
-    x1 = end["mouse"][0]
-    y1 = end["mouse"][1]
-
-    # draw straight line
-    bgl.glEnable(bgl.GL_BLEND)
-    bgl.glColor4f(r, g, b, 1.0)
-    bgl.glBegin(bgl.GL_LINE_STRIP)
-    bgl.glVertex2i(x0, y0)
-    bgl.glVertex2i(x1, y1)
-    bgl.glEnd()
-    # restore opengl defaults
-    bgl.glDisable(bgl.GL_BLEND)
-    bgl.glColor4f(0.0, 0.0, 0.0, 1.0)
-
-
-# return a list of all images that are being displayed in an editor =>OK!
-def get_images_in_editors(context):
-    images = []
-    for area in context.screen.areas:
-        if area.type != 'IMAGE_EDITOR':
-            continue
-        for space in area.spaces:
-            if space.type != 'IMAGE_EDITOR':
-                continue
-            if space.image:
-                images.append(space.image)
-                area.tag_redraw()
-
-    return(images)
-
-
-# calculate for 3d-view =>OK!
-def sync_calc_callback(self, context, area, region):
-    mid_x = region.width/2.0
-    mid_y = region.height/2.0
-    width = region.width
-    height = region.height
-
-    region_3d = False
-    for space in area.spaces:
-        if space.type == 'VIEW_3D':
-            region_3d = space.region_3d
-    if not region_3d:
-        return
-
-    view_mat = region_3d.perspective_matrix
-    ob_mat = context.active_object.matrix_world
-    total_mat = view_mat * ob_mat
-    mesh = context.active_object.data
-
-    def transform_loc(loc):
-        vec = total_mat * loc
-        vec = mathutils.Vector([vec[0]/vec[3], vec[1]/vec[3], vec[2]/vec[3]])
-        x = int(mid_x + vec[0]*width/2.0)
-        y = int(mid_y + vec[1]*height/2.0)
-
-        return([x, y])
-
-    # vertices
-    locs = [mesh.vertices[v].co.to_4d() for v in self.overlay_vertices]
-    self.position_vertices = []
-    for loc in locs:
-        self.position_vertices.append(transform_loc(loc))
-
-    # edges
-    locs = [[mesh.vertices[mesh.edges[edge].vertices[0]].co.to_4d(),
-        mesh.vertices[mesh.edges[edge].vertices[1]].co.to_4d()] \
-        for edge in self.overlay_edges]
-    self.position_edges = []
-    for v1, v2 in locs:
-        self.position_edges.append(transform_loc(v1))
-        self.position_edges.append(transform_loc(v2))
-
-    # faces
-    locs = [[mesh.vertices[mesh.faces[face].vertices[0]].co.to_4d(),
-        mesh.vertices[mesh.faces[face].vertices[1]].co.to_4d(),
-        mesh.vertices[mesh.faces[face].vertices[2]].co.to_4d(),
-        mesh.vertices[mesh.faces[face].vertices[3]].co.to_4d(),] \
-        for face in self.overlay_faces]
-    self.position_faces = []
-    for v1, v2, v3, v4 in locs:
-        self.position_faces.append(transform_loc(v1))
-        self.position_faces.append(transform_loc(v2))
-        self.position_faces.append(transform_loc(v3))
-        self.position_faces.append(transform_loc(v4))
-
-
-# draw in 3d-view  =>OK!
-def sync_draw_callback(self, context):
-    # polling
-    if context.mode != "EDIT_MESH":
-        return
-
-    # draw vertices
-    bgl.glColor4f(1.0, 0.0, 0.0, 1.0)
-    bgl.glPointSize(4)
-    bgl.glBegin(bgl.GL_POINTS)
-    for x, y in self.position_vertices:
-        bgl.glVertex2i(x, y)
-    bgl.glEnd()
-
-    # draw edges
-    bgl.glColor4f(1.0, 0.0, 0.0, 1.0)
-    bgl.glLineWidth(1.5)
-    bgl.glBegin(bgl.GL_LINES)
-    for x, y in self.position_edges:
-        bgl.glVertex2i(x, y)
-    bgl.glEnd()
-    bgl.glLineWidth(1)
-
-    # draw faces
-    bgl.glEnable(bgl.GL_BLEND)
-    bgl.glColor4f(1.0, 0.0, 0.0, 0.3)
-    bgl.glBegin(bgl.GL_QUADS)
-    for x, y in self.position_faces:
-        bgl.glVertex2i(x, y)
-    bgl.glEnd()
-    bgl.glDisable(bgl.GL_BLEND)
-
-
-# draw in image-editor =>OK!
-def sync_draw_callback2(self, context):
-    # polling
-    if context.mode != "EDIT_MESH":
-        return
-
-    # draw vertices
-    bgl.glColor4f(1.0, 0.0, 0.0, 1.0)
-    bgl.glPointSize(6)
-    bgl.glBegin(bgl.GL_POINTS)
-    for x, y in self.position2_vertices:
-        bgl.glVertex2f(x, y)
-    bgl.glEnd()
-
-
-# draw paint tool and blendmode in 3d-view =>?
+# Ecrit sur l'écran 3D: le nom de l'outil de peinture + le mode de fusion
 def toolmode_draw_callback(self, context):
     # polling
-    if context.mode != 'PAINT_TEXTURE':
+    if not bpy.ops.paint.image_paint.poll():
         return
-
-    # draw
-    if context.region:
-        main_y = context.region.height - 32
+    # Fixe la ligne d'écriture
+    if context.region:                     # fixee à une hauteur de l'écran - 32px
+        main_y = context.region.height - 100
     else:
-        return
+        return                       # Abandon car nous ne sommes pas en vue3D
     blend_dic = {"MIX": "Mix",
         "ADD": "Add",
         "SUB": "Subtract",
@@ -233,290 +81,104 @@ def toolmode_draw_callback(self, context):
         "SATURATION": "Saturation",
         "LUMINOSITY": "Luminosity",
         "COLOR": "Color"
-        }
+    }                               # dictionnaire des modes de fusion
+    
+    wm = context.window_manager
     brush = context.tool_settings.image_paint.brush
-    text = brush.name + " - " + blend_dic[brush.blend]
+    bhn, bhb = brush.name, brush.blend
+    # brush.blend ne fait pas référence à un fichier mais au mode de la brosse
+    text = bhn + " - " + blend_dic[bhb]
 
-    # text in top-left corner
-    bgl.glColor3f(0.6, 0.6, 0.6)
-    blf.position(0, 21, main_y, 0)
+    # écriture du texte au coin haut-gauche
+    bgl.glColor3f(.9, .9, .9)              # en blanc sale
+    blf.position(0, 21, main_y, 0)         # à la position en 4 chiffres
     blf.draw(0, text)
 
-    # text above brush
-    dt = time.time() - context.window_manager["tpp_toolmode_time"]
-    if dt < 1:
-        if "tpp_toolmode_brushloc" not in context.window_manager:
+    # Texte estompé selon le temps, au dessus de la brosse à 40px en rouge
+    dt = time.time() - wm["tpp_toolmode_time"]
+    if dt < 2:    # Aténuation de l'affichage selon le temps
+        if "tpp_toolmode_brushloc" not in wm:
             return
-        brush_x, brush_y = context.window_manager["tpp_toolmode_brushloc"]
+        
+        brush_x, brush_y = wm["tpp_toolmode_brushloc"]
         brush_x -= blf.dimensions(0, text)[0] / 2
-        bgl.glColor4f(0.6, 0.6, 0.6, min(1.0, (1.0 - dt)*2))
-        blf.position(0, brush_x, brush_y, 0)
+        bgl.glColor4f(0.9, 0.16, 0.16, min(1.0, (2 - dt)*2))
+        blf.position(0, brush_x, brush_y + 40, 0)
         blf.draw(0, text)
 
 
-# add ID-properties to window-manager
-def init_props():
+
+# ---------------------------------------------------------------------------
+# ajouter une propriété d'ID au gestionnaire de fenêtre
+def init_temp_props():
     wm = bpy.context.window_manager
-    wm["tpp_automergeuv"] = 0
+    wm["tpp_automergeuv"] = False                 # 1 int
+    wm["tpp_toolmode_time"] = time.time()         # 1 int in sec
+    wm["tpp_toolmode_brushloc"] = (-1, -1)        # 2 int
 
 
-# remove ID-properties from window-manager
-def remove_props():
+
+# enlever toutes propriétés d'ID du gestionnaire de fenêtres
+def remove_temp_props():
     wm = bpy.context.window_manager
     if "tpp_automergeuv" in wm:
         del wm["tpp_automergeuv"]
+        
     if "tpp_toolmode_time" in wm:
         del wm["tpp_toolmode_time"]
+        
     if "tpp_toolmode_brushloc" in wm:
-        del wm["tpp_toolmode_brusloc"]
+        del wm["tpp_toolmode_brushloc"]
+        
+    if "tpp_toolmode_on_screen" in wm:
+        del wm["tpp_toolmode_on_screen"]
 
 
-# calculate new snapped location based on start point (sx,sy)
-# and current mouse point (mx,my).  These coords appear to be
-# in 2D screen coords, with the origin at:
-# bottom-left, +x right, +y up.
+# -----------------------------------------------------------------------------
+# Retourner une liste de toutes les images qui ont été affichée dans un editeur d'image
+def get_images_in_editors(context):
+    images = []
+    for area in context.screen.areas:
+        if area.type != 'IMAGE_EDITOR':
+            continue
+        for space in area.spaces:
+            if space.type != 'IMAGE_EDITOR':
+                continue
+            if space.image:
+                images.append(space.image)
+                area.tag_redraw() # mise à jour de l'editeur d'image
 
-# =>?
-def do_snap( sx, sy, mx, my ):
-    # compute delta between current mouse position and
-    # start position
-    dx = mx - sx
-    dy = my - sy
-    adx = abs(dx)
-    ady = abs(dy)
-
-    # if delta is "close enough" to the diagonal
-    if abs( ady - adx ) < 0.5 * max(adx, ady):
-
-        # use a simple algorithm to snap based on horizontal
-        # distance (could use vertical distance, or could use
-        # radial distance but that would require more calcs).
-        if (dx > 0 and dy > 0) or (dx < 0 and dy < 0):
-            x = mx
-            y = sy + dx
-        elif (dx > 0 and dy < 0) or (dx < 0 and dy > 0):
-            x = mx
-            y = sy - dx
-        else:
-            x = mx
-            y = my
-    elif ( adx > ady ):
-        # closer to y-axis, snap vertical
-        x = mx
-        y = sy
-    else:
-        # closer to x-axis, snap horizontal
-        x = sx
-        y = my
-
-    return (x, y)
-
-
+    return(images)
 
 
 ##########################################
 #                                        #
-# Classes   =>?                          #
+#                  Classes               #
 #                                        #
 ##########################################
 
-#  =>?
-class ImageBuffer:
-    # based on script by Domino from BlenderArtists
-    # licensed GPL v2 or later
-    def __init__(self, image):
-        self.image = image
-        self.x, self.y = self.image.size
-        self.buffer = list(self.image.pixels)
-
-    def update(self):
-        self.image.pixels = self.buffer
-
-    def _index(self, x, y):
-        if x < 0 or y < 0 or x >= self.x or y >= self.y:
-            return None
-        return (x + y * self.x) * 4
-
-    def set_pixel(self, x, y, colour):
-        index = self._index(x, y)
-        if index is not None:
-            index = int(index)
-            self.buffer[index:index + 4] = colour
-
-    def get_pixel(self, x, y):
-        index = self._index(x, y)
-        if index is not None:
-            index = int(index)
-            return self.buffer[index:index + 4]
-        else:
-            return None
-
-
-# 2d bin packing  =>?
-class PackTree(object):
-    # based on python recipe by S W on ActiveState
-    # PSF license, 16 oct 2005. (GPL compatible)
-    def __init__(self, area):
-        if len(area) == 2:
-            area = (0,0,area[0],area[1])
-        self.area = area
-
-    def get_width(self):
-        return self.area[2] - self.area[0]
-    width = property(fget=get_width)
-
-    def get_height(self):
-        return self.area[3] - self.area[1]
-    height = property(fget=get_height)
-
-    def insert(self, area):
-        if hasattr(self, 'child'):
-            a = self.child[0].insert(area)
-            if a is None:
-                return self.child[1].insert(area)
-            else:
-                return a
-
-        area = PackTree(area)
-        if area.width <= self.width and area.height <= self.height:
-            self.child = [None,None]
-            self.child[0] = PackTree((self.area[0]+area.width, self.area[1], self.area[2], self.area[1] + area.height))
-            self.child[1] = PackTree((self.area[0], self.area[1]+area.height, self.area[2], self.area[3]))
-            return PackTree((self.area[0], self.area[1], self.area[0]+area.width, self.area[1]+area.height))
-
-
-##########################################
-#                                        #
-# Class Operators                        #
-#                                        #
-##########################################
-
-class AddDefaultImage(Operator):
-    '''Create and assign a new default image to the object'''
-    bl_idname = "object.add_default_image"
-    bl_label = "Add default image"
-
-    @classmethod
-    def poll(cls, context):
-        return(context.active_object and context.active_object.type=='MESH')
-
-    def invoke(self, context, event):
-        ob = context.active_object
-        mat = bpy.data.materials.new("default")
-
-        #Add texture to the mat
-        tex = bpy.data.textures.new("default", 'IMAGE')
-        img = bpy.data.images.new("default", 1024, 1024, alpha=True)
-        ts = mat.texture_slots.add()
-        tex.image = img
-        ts.texture = tex
-
-        ob.data.materials.append(mat)
-        return {'FINISHED'}
-
-
-class AutoMergeUV(Operator):
-    '''Have UV Merge enabled by default for merge actions'''
-    bl_idname = "paint.auto_merge_uv"
-    bl_label = "AutoMerge UV"
-
-
-    def invoke(self, context, event):
-        wm = context.window_manager
-        if "tpp_automergeuv" not in wm:
-            init_props()
-        wm["tpp_automergeuv"] = 1 - wm["tpp_automergeuv"]
-
-        km = bpy.context.window_manager.keyconfigs.default.keymaps['Mesh']
-        for kmi in km.keymap_items:
-            if kmi.idname == "mesh.merge":
-                kmi.properties.uvs = wm["tpp_automergeuv"]
-
-        return {'FINISHED'}
-
-
-class MakeBrushImageTexture(Operator):        #class command
-    bl_label = "New Texture from Image"
-    bl_idname = "gizmo.image_texture"
-
-    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
-
-    def invoke(self, context, event):
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
-
-    def execute(self,context):
-        tex = bpy.data.textures.new("ImageTexture",'NONE')
-        tex.use_nodes = True
-        remove = tex.node_tree.nodes[1]
-        tex.node_tree.nodes.remove(remove)
-        tex.node_tree.nodes.new("TextureNodeImage")
-        tex.node_tree.links.new(tex.node_tree.nodes[0].inputs[0],tex.node_tree.nodes[1].outputs[0])
-        i = bpy.data.images.load(self.filepath)
-        tex.node_tree.nodes[1].image = i
-        bpy.context.tool_settings.image_paint.brush.texture = tex
-
-        tex.node_tree.nodes[1].location = [0,50]
-        tex.node_tree.nodes[0].location = [200,50]
-
-        if bpy.context.mode == 'SCULPT':
-            bpy.context.tool_settings.sculpt.brush.texture = tex
-        elif bpy.context.mode == 'PAINT_VERTEX':
-            bpy.context.tool_settings.vertex_paint.brush.texture = tex
-        #elif bpy.context.mode == 'PAINT_WEIGHT':
-        #   bpy.context.tool_settings.weight_paint.brush.texture = tex
-        elif bpy.context.mode == 'PAINT_TEXTURE':
-            bpy.context.tool_settings.image_paint.brush.texture = tex
-
-        return set()
-
-
-class MakeBrushImageTextureMask(Operator):    #class command
-    bl_label = "New Mask Texture from Image"
-    bl_idname = "gizmo.image_texture_mask"
-
-    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
-
-    def invoke(self, context, event):
-        context.window_manager.fileselect_add(self)
-        return {'RUNNING_MODAL'}
-
-    def execute(self,context):
-        tex = bpy.data.textures.new("ImageTextureMask",'NONE')
-        tex.use_nodes = True
-        remove = tex.node_tree.nodes[1]
-        tex.node_tree.nodes.remove(remove)
-        tex.node_tree.nodes.new("TextureNodeImage")
-        tex.node_tree.nodes.new("TextureNodeRGBToBW")
-
-
-        tex.node_tree.links.new(tex.node_tree.nodes[0].inputs[0],tex.node_tree.nodes[2].outputs[0])
-        tex.node_tree.links.new(tex.node_tree.nodes[2].inputs[0],tex.node_tree.nodes[1].outputs[0])
-        tex.node_tree.nodes[1].location = [0,50]
-        tex.node_tree.nodes[2].location = [200,50]
-        tex.node_tree.nodes[0].location = [400,50]
-
-
-        i = bpy.data.images.load(self.filepath)
-        tex.node_tree.nodes[1].image = i
-        #if bpy.context.mode == 'SCULPT':
-        #   bpy.context.tool_settings.sculpt.brush.mask_texture = tex
-        #elif bpy.context.mode == 'PAINT_VERTEX':
-        #   bpy.context.tool_settings.vertex_paint.brush.mask_texture = tex
-        #elif bpy.context.mode == 'PAINT_WEIGHT':
-        #   bpy.context.tool_settings.weight_paint.brush.mask_texture = tex
-        if bpy.context.mode == 'PAINT_TEXTURE':
-            bpy.context.tool_settings.image_paint.brush.mask_texture = tex
-        return set()
-
-
+###############################################################################
+# PANNEAU DES OUTILS DE PEINTURE
 class BrushPopup(Operator):
+    """Brush popup"""
     bl_idname = "view3d.brush_popup"
-    bl_label = "Brush settings"
+    bl_label = "Brush settings" 
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'CYCLES'}
     bl_options = {'REGISTER', 'UNDO'}
 
+    @classmethod
+    def poll(self, context):
+        if context.active_object:
+            A = context.active_object.type == 'MESH' 
+            B = context.mode in {'PAINT_TEXTURE','PAINT_VERTEX','PAINT_WEIGHT'}
+            return A and B
 
     @staticmethod
+    def check(self, context):
+        return True
+
+
+    @staticmethod  
     def paint_settings(context):
         toolsettings = context.tool_settings
 
@@ -576,23 +238,6 @@ class BrushPopup(Operator):
         parent.template_color_picker(ptr, prop_name, value_slider=value_slider)
 
 
-    def check(self, context):
-        '''
-        settings = self.paint_settings(context)
-        brush_updated = settings.brush.is_updated
-        if brush_updated:
-            return True
-        '''
-        return True
-
-
-    @classmethod
-    def poll(self, context):
-        obj =  context.active_object
-        if obj is not None:
-            A = context.active_object.type == 'MESH'
-            B = context.mode in {'PAINT_TEXTURE','PAINT_VERTEX','PAINT_WEIGHT'}
-            return A and B
 
 
     def brush_texpaint_common(self, layout, context, brush, settings, projpaint=False):
@@ -642,6 +287,7 @@ class BrushPopup(Operator):
                 col.prop(brush, "blur_kernel_radius")
             col.separator()
             col.prop(brush, "blur_mode")
+
         elif brush.image_tool == 'MASK':
             col.prop(brush, "weight", text="Mask Value", slider=True)
 
@@ -718,169 +364,173 @@ class BrushPopup(Operator):
         col.template_ID(settings, "palette", new="palette.new")
 
 
+
     def draw(self, context):
         # Init values
         toolsettings = context.tool_settings
         settings = self.paint_settings(context)
-        brush = settings.brush
-        ipaint = toolsettings.image_paint
-
+        
         layout = self.layout
-
-        # Stroke mode
         col = layout.column()
-        col.prop(brush, "stroke_method", text="")
-
-        if brush.use_anchor:
-            col.separator()
-            col.prop(brush, "use_edge_to_edge", "Edge To Edge")
-
-        if brush.use_airbrush:
-            col.separator()
-            col.prop(brush, "rate", text="Rate", slider=True)
-
-        if brush.use_space:
-            col.separator()
+        
+        if not settings:
             row = col.row(align=True)
-            row.prop(brush, "spacing", text="Spacing")
-            row.prop(brush, "use_pressure_spacing", toggle=True, text="")
-
-        if brush.use_line or brush.use_curve:
-            col.separator()
-            row = col.row(align=True)
-            row.prop(brush, "spacing", text="Spacing")
-
-        if brush.use_curve:
-            col.separator()
-            col.template_ID(brush, "paint_curve", new="paintcurve.new")
-            col.operator("paintcurve.draw")
-
+            row.label(text="Setup texture paint, please!")
         else:
-            col.separator()
-
-            row = col.row(align=True)
-            row.prop(brush, "use_relative_jitter", icon_only=True)
-            if brush.use_relative_jitter:
-                row.prop(brush, "jitter", slider=True)
-            else:
-                row.prop(brush, "jitter_absolute")
-            row.prop(brush, "use_pressure_jitter", toggle=True, text="")
-
-            col = layout.column()
-            col.separator()
-
-            if brush.brush_capabilities.has_smooth_stroke:
-                col.prop(brush, "use_smooth_stroke")
-
-                sub = col.column()
-                sub.active = brush.use_smooth_stroke
-                sub.prop(brush, "smooth_stroke_radius", text="Radius", slider=True)
-                sub.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
-
-        layout.prop(settings, "input_samples")
-
-        # Curve stroke
-        col = layout.column(align=True)
-         
-        settings = self.paint_settings(context)
- 
-        brush = settings.brush
- 
-        layout.template_curve_mapping(brush, "curve", brush=True)
- 
-        col = layout.column(align=True)
-        row = col.row(align=True)
-        row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
-        row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
-        row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
-        row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
-        row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
-        row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
-
-
-        # Symetries mode
-        col = layout.column(align=True)
-        row = col.row(align=True)
-        row.prop(ipaint, "use_symmetry_x", text="X", toggle=True)
-        row.prop(ipaint, "use_symmetry_y", text="Y", toggle=True)
-        row.prop(ipaint, "use_symmetry_z", text="Z", toggle=True)
-
-        # imagepaint tool operate buttons
-        col = layout.split().column()
-        col.template_ID_preview(settings, "brush", new="brush.add", rows=3, cols=8)
-
-        ########################################################################
-        # Texture Paint Mode #
-
-        if context.image_paint_object and brush:
-            self.brush_texpaint_common( layout, context, brush, settings, True)
-
-        ########################################################################
-        # Weight Paint Mode #
-        elif context.weight_paint_object and brush:
-
-            col = layout.column()
-
-            row = col.row(align=True)
-            self.prop_unified_weight(row, context, brush, "weight", slider=True, text="Weight")
-
-            row = col.row(align=True)
-            self.prop_unified_size(row, context, brush, "size", slider=True, text="Radius")
-            self.prop_unified_size(row, context, brush, "use_pressure_size")
-
-            row = col.row(align=True)
-            self.prop_unified_strength(row, context, brush, "strength", text="Strength")
-            self.prop_unified_strength(row, context, brush, "use_pressure_strength")
-
-            col.prop(brush, "vertex_tool", text="Blend")
-
-            if brush.vertex_tool == 'BLUR':
-                col.prop(brush, "use_accumulate")
+            brush = settings.brush
+            ipaint = toolsettings.image_paint
+            # Stroke mode
+            col.prop(brush, "stroke_method", text="")
+    
+            if brush.use_anchor:
                 col.separator()
-
-            col = layout.column()
-            col.prop(toolsettings, "use_auto_normalize", text="Auto Normalize")
-            col.prop(toolsettings, "use_multipaint", text="Multi-Paint")
-
-        ########################################################################
-        # Vertex Paint Mode #
-        elif context.vertex_paint_object and brush:
-            col = layout.column()
-            self.prop_unified_color_picker(col, context, brush, "color", value_slider=True)
-            if settings.palette:
-                col.template_palette(settings, "palette", color=True)
-            self.prop_unified_color(col, context, brush, "color", text="")
-
-            col.separator()
+                col.prop(brush, "use_edge_to_edge", "Edge To Edge")
+    
+            if brush.use_airbrush:
+                col.separator()
+                col.prop(brush, "rate", text="Rate", slider=True)
+    
+            if brush.use_space:
+                col.separator()
+                row = col.row(align=True)
+                row.prop(brush, "spacing", text="Spacing")
+                row.prop(brush, "use_pressure_spacing", toggle=True, text="")
+    
+            if brush.use_line or brush.use_curve:
+                col.separator()
+                row = col.row(align=True)
+                row.prop(brush, "spacing", text="Spacing")
+    
+            if brush.use_curve:
+                col.separator()
+                col.template_ID(brush, "paint_curve", new="paintcurve.new")
+                col.operator("paintcurve.draw")
+    
+            else:
+                col.separator()
+    
+                row = col.row(align=True)
+                row.prop(brush, "use_relative_jitter", icon_only=True)
+                if brush.use_relative_jitter:
+                    row.prop(brush, "jitter", slider=True)
+                else:
+                    row.prop(brush, "jitter_absolute")
+                row.prop(brush, "use_pressure_jitter", toggle=True, text="")
+    
+                col = layout.column()
+                col.separator()
+    
+                if brush.brush_capabilities.has_smooth_stroke:
+                    col.prop(brush, "use_smooth_stroke")
+    
+                    sub = col.column()
+                    sub.active = brush.use_smooth_stroke
+                    sub.prop(brush, "smooth_stroke_radius", text="Radius", slider=True)
+                    sub.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
+    
+            layout.prop(settings, "input_samples")
+    
+            # Curve stroke
+            col = layout.column(align=True)
             row = col.row(align=True)
-            self.prop_unified_size(row, context, brush, "size", slider=True, text="Radius")
-            self.prop_unified_size(row, context, brush, "use_pressure_size")
-
+            row.operator("brush.curve_preset", icon='SMOOTHCURVE', text="").shape = 'SMOOTH'
+            row.operator("brush.curve_preset", icon='SPHERECURVE', text="").shape = 'ROUND'
+            row.operator("brush.curve_preset", icon='ROOTCURVE', text="").shape = 'ROOT'
+            row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
+            row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
+            row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
+    
+            # Symetries mode
+            col = layout.column(align=True) 
             row = col.row(align=True)
-            self.prop_unified_strength(row, context, brush, "strength", text="Strength")
-            self.prop_unified_strength(row, context, brush, "use_pressure_strength")
+            row.prop(ipaint, "use_symmetry_x", text="X", toggle=True)
+            row.prop(ipaint, "use_symmetry_y", text="Y", toggle=True)
+            row.prop(ipaint, "use_symmetry_z", text="Z", toggle=True) 
+    
+            # imagepaint tool operate  buttons: UILayout.template_ID_preview()  
+            col = layout.split().column() 
+            ###################################### ICI PROBLEME d'icones de brosse !  
+            # bpy.context.tool_settings.image_paint.brush
+            
+            col.template_ID_preview(settings, "brush", new="brush.add", rows=1, cols=3   )
+            
+            ######################################################################## 
+             
+            # Texture Paint Mode # 
+            if context.image_paint_object and brush:
+                self.brush_texpaint_common( layout, context, brush, settings, True)
+    
+            ########################################################################
+            # Weight Paint Mode #
+            elif context.weight_paint_object and brush:
+    
+                col = layout.column()
+    
+                row = col.row(align=True)
+                self.prop_unified_weight(row, context, brush, "weight", slider=True, text="Weight")
+    
+                row = col.row(align=True)
+                self.prop_unified_size(row, context, brush, "size", slider=True, text="Radius")
+                self.prop_unified_size(row, context, brush, "use_pressure_size")
+    
+                row = col.row(align=True)
+                self.prop_unified_strength(row, context, brush, "strength", text="Strength")
+                self.prop_unified_strength(row, context, brush, "use_pressure_strength")
+    
+                col.prop(brush, "vertex_tool", text="Blend")
+    
+                if brush.vertex_tool == 'BLUR':
+                    col.prop(brush, "use_accumulate")
+                    col.separator()
+    
+                col = layout.column()
+                col.prop(toolsettings, "use_auto_normalize", text="Auto Normalize")
+                col.prop(toolsettings, "use_multipaint", text="Multi-Paint")
+    
+            ########################################################################
+            # Vertex Paint Mode #
+            elif context.vertex_paint_object and brush:
+                col = layout.column()
+                self.prop_unified_color_picker(col, context, brush, "color", value_slider=True)
+                if settings.palette:
+                    col.template_palette(settings, "palette", color=True)
+                self.prop_unified_color(col, context, brush, "color", text="")
+    
+                col.separator()
+                row = col.row(align=True)
+                self.prop_unified_size(row, context, brush, "size", slider=True, text="Radius")
+                self.prop_unified_size(row, context, brush, "use_pressure_size")
+    
+                row = col.row(align=True)
+                self.prop_unified_strength(row, context, brush, "strength", text="Strength")
+                self.prop_unified_strength(row, context, brush, "use_pressure_strength")
+    
+                col.separator()
+                col.prop(brush, "vertex_tool", text="Blend")
+    
+                col.separator()
+                col.template_ID(settings, "palette", new="palette.new")
 
-            col.separator()
-            col.prop(brush, "vertex_tool", text="Blend")
-
-            col.separator()
-            col.template_ID(settings, "palette", new="palette.new")
 
 
 
-    def invoke(self, context, event):
+    def invoke(self, context, event): 
         if context.space_data.type == 'IMAGE_EDITOR':
             context.space_data.mode = 'PAINT'
-        wm = context.window_manager
-        return wm.invoke_props_dialog(self, width=160)
+             
+        return context.window_manager.invoke_props_dialog(self, width=148)
+        # return {'PASS_THROUGH'} ou {'CANCELLED'} si le bouton ok est cliqué
 
     def execute(self, context):
         return {'FINISHED'}
 
 
+# PANNEAU DES MASQUES DE PEINTURE
 class TexturePopup(Operator):
+    """Texture popup"""
     bl_idname = "view3d.texture_popup"
-    bl_label = "Textures and Mask Textures settings"
+    bl_label = "Texture & Mask"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'CYCLES'}
     bl_options = {'REGISTER', 'UNDO'}
 
     toggleMenu = bpy.props.BoolProperty(default=True)  # toogle texture or Mask menu
@@ -918,8 +568,7 @@ class TexturePopup(Operator):
 
         if self.toggleMenu:
             col = layout.column()                                   #TEXTURES
-            col.template_ID_preview(brush, "texture", new="texture.new", \
-                                                                rows=3, cols=8)
+            col.template_ID_preview(brush, "texture", new="texture.new", rows=3, cols=8)
             layout.label(text="Brush Mapping:")
 
             # texture_map_mode
@@ -992,53 +641,18 @@ class TexturePopup(Operator):
     def invoke(self, context, event):
         if context.space_data.type == 'IMAGE_EDITOR':
             context.space_data.mode = 'PAINT'
-        return context.window_manager.\
-                                invoke_props_dialog(self, width=160)
+        return context.window_manager.invoke_props_dialog(self, width=146)
 
     def execute(self, context):
         return {'FINISHED'}
 
-class SelectVertgroup(bpy.types.Operator):
-    """Select Vertgroup"""
-    bl_idname = "object.select_vgroup"
 
-
-    bl_label = "Select VGroup"
-    bl_options = { 'REGISTER', 'UNDO' }
-
-    def execute(self, context):
-
-        bpy.ops.object.editmode_toggle()#toggle editmode
-        bpy.ops.object.vertex_group_select()#select current active vgroup
-        bpy.ops.object.editmode_toggle()#toggle editmode
-        bpy.ops.paint.texture_paint_toggle()#Texpaint
-        bpy.context.object.data.use_paint_mask = True #set face select masking on in case we forgot
-
-
-        return {'FINISHED'}
-
-class DeselectVertgroup(bpy.types.Operator):
-    """Deselect Vertgroup"""
-    bl_idname = "object.deselect_vgroup"
-
-
-    bl_label = "Deselect VGroup"
-    bl_options = { 'REGISTER', 'UNDO' }
-
-    def execute(self, context):
-
-        bpy.ops.object.editmode_toggle()#toggle editmode
-        bpy.ops.object.vertex_group_deselect()#select current active vgroup
-        bpy.ops.object.editmode_toggle()#toggle editmode
-        bpy.ops.paint.texture_paint_toggle()#Texpaint
-        bpy.context.object.data.use_paint_mask = True #set face select masking on in case we forgot
-
-
-        return {'FINISHED'}
-
-class Slots_projectpaint(Operator):
-    bl_idname = "slots.projectpaint"
+# PANNEAU DES PROJECTPAINT SLOTS (& Blender MASKs)
+class ProjectpaintPopup(Operator):
+    """Slots ProjectPaint popup"""
+    bl_idname = "view3d.projectpaint"
     bl_label = "Slots & VGroups"
+    COMPAT_ENGINES = {'BLENDER_RENDER', 'CYCLES'}
     bl_options = {'REGISTER', 'UNDO'}
 
     def check(self, context):
@@ -1048,28 +662,35 @@ class Slots_projectpaint(Operator):
     def poll(cls, context):
         brush = context.tool_settings.image_paint.brush
         ob = context.active_object
+        group = ob.vertex_groups.active
         if (brush is not None and ob is not None):
-            A = context.active_object.type == 'MESH'
-            B = context.mode == 'PAINT_TEXTURE'
-            return A and B
+            A = ob.type == 'MESH'
+             # -------------------------------
+            B = context.space_data.type == 'VIEW_3D'
+            if A:
+                C = context.mode in {'PAINT_TEXTURE','PAINT_VERTEX','PAINT_WEIGHT'}
+                D = context.mode == 'EDIT_MESH'
+            # -------------------------------
+            E = context.space_data.type == 'IMAGE_EDITOR'
+            if E:
+                F = context.mode == 'EDIT_MESH'
+                G = context.space_data.mode == 'PAINT'
+            # -------------------------------
+            H = context.mode == 'WEIGHT_PAINT' and ob.vertex_groups and ob.data.use_paint_mask_vertex
+            return A and (( B and (C or  D)) or (E and (F or G) or H))
+        return False
 
     def draw(self, context):
         settings = context.tool_settings.image_paint
         ob = context.active_object
+        
+        Egne = bpy.context.scene.render.engine
+        
         layout = self.layout
-        col = layout.column()
-
-        col.separator()
-        col.operator("image.save_dirty", text="Save All Images")
-
-        layout = self.layout
-
+        #-----------------------------------------------------------Vertex Paint
         ob = context.object
         group = ob.vertex_groups.active
-
-        rows = 2
-        if group:
-            rows = 4
+        rows = 4 if group else 2
 
         row = layout.row()
         row.template_list("MESH_UL_vgroups", "", ob, "vertex_groups", ob.vertex_groups, "active_index", rows=rows)
@@ -1084,111 +705,116 @@ class Slots_projectpaint(Operator):
             col.separator()
             col.operator("object.vertex_group_move", icon='TRIA_UP', text="").direction = 'UP'
             col.operator("object.vertex_group_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
-
+            
         if ob.vertex_groups and (ob.mode == 'EDIT' or (ob.mode == 'WEIGHT_PAINT' and ob.type == 'MESH' and ob.data.use_paint_mask_vertex)):
             row = layout.row()
-
+        
             sub = row.row(align=True)
             sub.operator("object.vertex_group_assign", text="Assign")
             sub.operator("object.vertex_group_remove_from", text="Remove")
-
+        
             sub = row.row(align=True)
             sub.operator("object.vertex_group_select", text="Select")
             sub.operator("object.vertex_group_deselect", text="Deselect")
+        
+            layout.prop(context.tool_settings, "vertex_group_weight", text="Weight")
 
 
-        layout.prop(context.tool_settings, "vertex_group_weight", text="Weight")
-
-        #row = layout.row()
-        row = layout.row(align=True)
-        row.operator("object.select_vgroup", text = "Select VGroup", icon = 'ROTACTIVE')
-        #row = layout.column()
-        row.operator("object.deselect_vgroup", text = "Deselect VGroup", icon = 'ROTACTIVE')
-
-        layout = self.layout
-        col = layout.column()
-
-        col.label("Painting Mode")
-        col.prop(settings, "mode", text="")
-        col.separator()
-
-        if settings.mode == 'MATERIAL':
-            if len(ob.material_slots) > 1:
-                col.label("Materials")
-                col.template_list("MATERIAL_UL_matslots", "layers",
-                                  ob, "material_slots",
-                                  ob, "active_material_index", rows=2)
-
-            mat = ob.active_material
-            if mat:
-                col.label("Available Paint Slots")
-                col.template_list("TEXTURE_UL_texpaintslots", "",
-                                  mat, "texture_paint_images",
-                                  mat, "paint_active_slot", rows=2)
-
-                if mat.texture_paint_slots:
-                    slot = mat.texture_paint_slots[mat.paint_active_slot]
-                else:
-                    slot = None
-
-                if (not mat.use_nodes) and context.scene.render.engine in {'BLENDER_RENDER', 'BLENDER_GAME'}:
-                    row = col.row(align=True)
-                    row.operator_menu_enum("paint.add_texture_paint_slot", "type")
-                    row.operator("paint.delete_texture_paint_slot", text="", icon='X')
-
-                    if slot:
-                        col.prop(mat.texture_slots[slot.index], "blend_type")
-                        col.separator()
-
-                if slot and slot.index != -1:
-                    col.label("UV Map")
-                    col.prop_search(slot, "uv_layer", ob.data, "uv_textures", text="")
-
-        elif settings.mode == 'IMAGE':
-            mesh = ob.data
-            uv_text = mesh.uv_textures.active.name if mesh.uv_textures.active else ""
-            col.label("Canvas Image")
-            col.template_ID(settings, "canvas")
-            col.operator("image.new", text="New").gen_context = 'PAINT_CANVAS'
-            col.label("UV Map")
-            col.menu("VIEW3D_MT_tools_projectpaint_uvlayer", text=uv_text, translate=False)
-
+        #--------------------------------------------------------------Mat Paint
+        if context.mode == 'PAINT_TEXTURE':
+            col = layout.column()
+            col.label("Painting Mode")
+            col.prop(settings, "mode", text="")
+            col.separator()
+    
+            if settings.mode == 'MATERIAL':
+                if len(ob.material_slots) > 1:
+                    col.label("Materials")
+                    col.template_list("MATERIAL_UL_matslots", "layers",
+                                      ob, "material_slots",
+                                      ob, "active_material_index", rows=2)
+    
+                mat = ob.active_material
+                if mat:
+                    col.label("Available Paint Slots")
+                    col.template_list("TEXTURE_UL_texpaintslots", "",
+                                      mat, "texture_paint_images",
+                                      mat, "paint_active_slot", rows=2)
+    
+                    if mat.texture_paint_slots:
+                        slot = mat.texture_paint_slots[mat.paint_active_slot]
+                    else:
+                        slot = None
+    
+                    if (not mat.use_nodes) and context.scene.render.engine in {'BLENDER_RENDER', 'BLENDER_GAME'}:
+                        row = col.row(align=True)
+                        row.operator_menu_enum("paint.add_texture_paint_slot", "type")
+                        row.operator("paint.delete_texture_paint_slot", text="", icon='X')
+    
+                        if slot:
+                            col.prop(mat.texture_slots[slot.index], "blend_type")
+                            col.separator()
+    
+                    if slot and slot.index != -1:
+                        col.label("UV Map")
+                        col.prop_search(slot, "uv_layer", ob.data, "uv_textures", text="")
+    
+            elif settings.mode == 'IMAGE':
+                mesh = ob.data
+                uv_text = mesh.uv_textures.active.name if mesh.uv_textures.active else ""
+                col.label("Canvas Image")
+                col.template_ID(settings, "canvas")
+                col.operator("image.new", text="New").gen_context = 'PAINT_CANVAS'
+                col.label("UV Map")
+                col.menu("VIEW3D_MT_tools_projectpaint_uvlayer", text=uv_text, translate=False)
+    
+            col.separator()
+            if Egne == 'CYCLES':
+                col.operator("paint.add_texture_paint_slot", text="Add Texture", icon="FACESEL_HLT").type="DIFFUSE_COLOR"
+                col.operator("object.save_ext_paint_texture", text="Save selected Slot")
+            else:
+                col.operator("image.save_dirty", text="Save All Images")
 
     def invoke(self, context,event):
-        if context.space_data.type == 'IMAGE_EDITOR':
-            context.space_data.mode = 'PAINT'
         return context.window_manager.invoke_props_dialog(self, width=240)
 
     def execute(self, context):
         return {'FINISHED'}
 
 
-class ChangeSelection(Operator):
-    '''Select more or less vertices/edges/faces, connected to the original selection'''
-    bl_idname = "paint.change_selection"
-    bl_label = "Change selection"
 
-    mode = bpy.props.EnumProperty(name="Mode",
-        items = (("more", "More", "Select more vertices/edges/faces"),
-            ("less", "Less", "Select less vertices/edges/faces")),
-        description = "Choose whether the selection should be increased or decreased",
-        default = 'more')
+
+################################################################################
+# Ajouter un mat + 1 texture DIFF 1024x1024-alpha à l'objet selectionné
+class AddDefaultMatDiff(Operator):
+    '''Create and assign a new mat + DIFF texture to the object'''
+    bl_idname = "object.add_default_image"
+    bl_label = "Add default image"
+
 
     @classmethod
     def poll(cls, context):
-        return bpy.ops.paint.image_paint.poll()
+        if context.active_object!=None:
+            return context.active_object.type=='MESH'
+        return False
 
     def invoke(self, context, event):
-        bpy.ops.object.mode_set(mode='EDIT')
-        if self.mode == 'more':
-            bpy.ops.mesh.select_more()
-        else: #self.mode == 'less'
-            bpy.ops.mesh.select_less()
-        bpy.ops.object.mode_set(mode='TEXTURE_PAINT')
+        ob = context.active_object
+        mat = bpy.data.materials.new("default")
 
+        #Add texture to the mat
+        tex = bpy.data.textures.new("default", 'IMAGE')
+        img = bpy.data.images.new("default", 1024, 1024, alpha=True)
+        ts = mat.texture_slots.add()
+        tex.image = img
+        ts.texture_coords = 'UV'
+        ts.use_map_color_diffuse = True
+        ts.texture = tex
+
+        ob.data.materials.append(mat)
         return {'FINISHED'}
 
-
+# Ajouter un mat standart + 3 textures DIFF/SPEC/NORM sans image à tous les objets selectionnés
 class DefaultMaterial(Operator):
     '''Add a default dif/spec/normal material to an object'''
     bl_idname = "object.default_material"
@@ -1207,101 +833,109 @@ class DefaultMaterial(Operator):
             if not ob.data or ob.type != 'MESH':
                 continue
 
-        mat = bpy.data.materials.new(ob.name)
+            mat = bpy.data.materials.new(ob.name)
 
-        # diffuse texture
-        tex = bpy.data.textures.new(ob.name+"_DIFF", 'IMAGE')
-        ts = mat.texture_slots.add()
-        ts.texture_coords = 'UV'
-        ts.texture = tex
-        # specular texture
-        tex = bpy.data.textures.new(ob.name+"_SPEC", 'IMAGE')
-        ts = mat.texture_slots.add()
-        ts.texture_coords = 'UV'
-        ts.use_map_color_diffuse = False
-        ts.use_map_specular = True
-        ts.texture = tex
-        # normal texture
-        tex = bpy.data.textures.new(ob.name+"_NORM", 'IMAGE')
-        tex.use_normal_map = True
-        ts = mat.texture_slots.add()
-        ts.texture_coords = 'UV'
-        ts.use_map_color_diffuse = False
-        ts.use_map_normal = True
-        ts.texture = tex
+            # diffuse texture
+            tex = bpy.data.textures.new(ob.name+"_DIFF", 'IMAGE')
+            ts = mat.texture_slots.add()
+            ts.texture_coords = 'UV'
+            ts.texture = tex
+            # specular texture
+            tex = bpy.data.textures.new(ob.name+"_SPEC", 'IMAGE')
+            ts = mat.texture_slots.add()
+            ts.texture_coords = 'UV'
+            ts.use_map_color_diffuse = False
+            ts.use_map_specular = True
+            ts.texture = tex
+            # normal texture
+            tex = bpy.data.textures.new(ob.name+"_NORM", 'IMAGE')
+            tex.use_normal_map = True
+            ts = mat.texture_slots.add()
+            ts.texture_coords = 'UV'
+            ts.use_map_color_diffuse = False
+            ts.use_map_normal = True
+            ts.texture = tex
 
-        ob.data.materials.append(mat)
+            ob.data.materials.append(mat)
 
         return {'FINISHED'}
 
+class MakeBrushImageTexture(Operator):
+    bl_label = "New Texture from Image"                 
+    bl_idname = "gizmo.image_texture"
 
-class GridTexture(Operator):
-    '''Toggle between current texture and UV / Colour grids'''
-    bl_idname = "paint.grid_texture"
-    bl_label = "Grid texture"
-
-    @classmethod
-    def poll(cls, context):
-        return bpy.ops.paint.image_paint.poll()
+    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
 
     def invoke(self, context, event):
-        Egne = bpy.context.scene.render.engine
-        if Egne == 'BLENDER_RENDER':
-            objects = bpy.context.selected_objects
-            meshes = [object.data for object in objects if object.type == 'MESH']
-            if not meshes:
-                self.report({'INFO'}, "Couldn't locate meshes to operate on")
-                return {'CANCELLED'}
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
 
-            tex_image = []
-            for mesh in meshes:
-                for mat in mesh.materials:
-                    for tex in [ts.texture for ts in mat.texture_slots if ts and ts.texture.type=='IMAGE' and ts.texture.image]:
-                        tex_image.append([tex.name, tex.image.name])
-            if not tex_image:
-                self.report({'INFO'}, "Couldn't locate textures to operate on")
-                return {'CANCELLED'}
+    def execute(self,context):
+        tex = bpy.data.textures.new("ImageTexture",'NONE')
+        tex.use_nodes = True
+        remove = tex.node_tree.nodes[1]
+        tex.node_tree.nodes.remove(remove)
+        tex.node_tree.nodes.new("TextureNodeImage")
+        tex.node_tree.links.new(tex.node_tree.nodes[0].inputs[0],tex.node_tree.nodes[1].outputs[0])
+        tex.node_tree.nodes[1].location = [0,50]
+        tex.node_tree.nodes[0].location = [200,50]
+    
+        i = bpy.data.images.load(self.filepath)
+        tex.node_tree.nodes[1].image = i
+    
+        if bpy.context.mode == 'PAINT_TEXTURE':
+            bpy.context.tool_settings.image_paint.brush.texture = tex
+        #elif bpy.context.mode == 'SCULPT':
+            #bpy.context.tool_settings.sculpt.brush.texture = tex
+        #elif bpy.context.mode == 'PAINT_VERTEX':
+            #bpy.context.tool_settings.vertex_paint.brush.texture = tex
+        #elif bpy.context.mode == 'PAINT_WEIGHT':
+            #bpy.context.tool_settings.weight_paint.brush.texture = tex
 
-            first_image = bpy.data.images[tex_image[0][1]]
-            if "grid_texture_mode" in first_image:
-                mode = first_image["grid_texture_mode"]
-            else:
-                mode = 1
-
-            if mode == 1:
-                # original textures, change to new UV grid
-                width = max([bpy.data.images[image].size[0] for tex, image in tex_image])
-                height = max([bpy.data.images[image].size[1] for tex, image in tex_image])
-                new_image = bpy.data.images.new("temp_grid", width=width, height=height)
-                new_image.generated_type = 'UV_GRID'
-                new_image["grid_texture"] = tex_image
-                new_image["grid_texture_mode"] = 2
-                for tex, image in tex_image:
-                    bpy.data.textures[tex].image = new_image
-            elif mode == 2:
-                # change from UV grid to Colour grid
-                first_image.generated_type = 'COLOR_GRID'
-                first_image["grid_texture_mode"] = 3
-            elif mode == 3:
-                # change from Colour grid back to original textures
-                if "grid_texture" not in first_image:
-                    first_image["grid_texture_mode"] = 1
-                    self.report({'ERROR'}, "Couldn't retrieve original images")
-                    return {'FINISHED'}
-                tex_image = first_image["grid_texture"]
-                for tex, image in tex_image:
-                    if tex in bpy.data.textures and image in bpy.data.images:
-                        bpy.data.textures[tex].image = bpy.data.images[image]
-                bpy.data.images.remove(first_image)
-
-            return {'FINISHED'}
-        elif Egne =='CYCLES':
-
-            return {'FINISHED'}
-        else:
-            return {'FINISHED'}
+        return set()
 
 
+class MakeBrushImageTextureMask(Operator):
+    bl_label = "New Mask Texture from Image"
+    bl_idname = "gizmo.image_texture_mask"
+
+    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+
+    def invoke(self, context, event):
+        context.window_manager.fileselect_add(self)
+        return {'RUNNING_MODAL'}
+
+    def execute(self,context):
+        tex = bpy.data.textures.new("ImageTextureMask",'NONE')
+        tex.use_nodes = True
+        remove = tex.node_tree.nodes[1]
+        tex.node_tree.nodes.remove(remove)
+        tex.node_tree.nodes.new("TextureNodeImage")
+        tex.node_tree.nodes.new("TextureNodeRGBToBW")
+
+        tex.node_tree.links.new(tex.node_tree.nodes[0].inputs[0],tex.node_tree.nodes[2].outputs[0])
+        tex.node_tree.links.new(tex.node_tree.nodes[2].inputs[0],tex.node_tree.nodes[1].outputs[0])
+        tex.node_tree.nodes[1].location = [0,50]
+        tex.node_tree.nodes[2].location = [200,50]
+        tex.node_tree.nodes[0].location = [400,50]
+
+        i = bpy.data.images.load(self.filepath)
+        tex.node_tree.nodes[1].image = i
+
+        if bpy.context.mode == 'PAINT_TEXTURE':
+            bpy.context.tool_settings.image_paint.brush.mask_texture = tex
+        #elif bpy.context.mode == 'SCULPT':
+            #bpy.context.tool_settings.sculpt.brush.mask_texture = tex
+        #elif bpy.context.mode == 'PAINT_VERTEX':
+            #bpy.context.tool_settings.vertex_paint.brush.mask_texture = tex
+        #elif bpy.context.mode == 'PAINT_WEIGHT':
+            #bpy.context.tool_settings.weight_paint.brush.mask_texture = tex
+
+        return set()
+
+
+
+# Importer en même temps tous les objets de plusieurs [fichiers .blend étant dans un dossier]!
 class MassLinkAppend(Operator, ImportHelper):
     '''Import objects from multiple blend-files at the same time'''
     bl_idname = "wm.mass_link_append"
@@ -1309,20 +943,29 @@ class MassLinkAppend(Operator, ImportHelper):
     bl_options = {'REGISTER', 'UNDO'}
 
     active_layer = bpy.props.BoolProperty(name="Active Layer",
-        default=True,
-        description="Put the linked objects on the active layer")
+            default=True,
+            description="Put the linked objects on the active layer"
+    )
+
     autoselect = bpy.props.BoolProperty(name="Select",
-        default=True,
-        description="Select the linked objects")
+            default=True,
+            description="Select the linked objects"
+    )
+
     instance_groups = bpy.props.BoolProperty(name="Instance Groups",
-        default=False,
-        description="Create instances for each group as a DupliGroup")
+            default=False,
+            description="Create instances for each group as a DupliGroup"
+    )
+
     link = bpy.props.BoolProperty(name="Link",
-        default=False,
-        description="Link the objects or datablocks rather than appending")
+            default=False,
+            description="Link the objects or datablocks rather than appending"
+    )
+
     relative_path = bpy.props.BoolProperty(name="Relative Path",
-        default=True,
-        description="Select the file relative to the blend file")
+            default=True,
+            description="Select the file relative to the blend file"
+    )
 
     def execute(self, context):
         directory, filename = os.path.split(bpy.path.abspath(self.filepath))
@@ -1343,9 +986,9 @@ class MassLinkAppend(Operator, ImportHelper):
         for directory, filename in files:
             # get object names
             with bpy.data.libraries.load(directory + filename) as (append_lib, current_lib):
-                ob_names = append_lib.objects
+                ob_names = append_lib.objects  # les noms des objets à ajouter
             for name in ob_names:
-                append_libs = [{"name":name} for name in ob_names]
+                append_libs = [{"name":name} for name in ob_names] # ajout des objets à la librairie
             # appending / linking
             bpy.ops.wm.link_append(filepath=os.sep+filename+os.sep+"Object"+os.sep,
                 filename=name, directory=directory+filename+os.sep+"Object"+os.sep,
@@ -1356,31 +999,34 @@ class MassLinkAppend(Operator, ImportHelper):
                 bpy.ops.object.mode_set(mode='OBJECT')
                 bpy.ops.object.make_local()
                 bpy.ops.object.make_local(type='SELECTED_OBJECTS_DATA')
-            new_selection += context.selected_objects
+            new_selection += context.selected_objects   # importance de autoselect=True
         print("__________________________________")
-        bpy.ops.object.select_all(action='DESELECT')
-        if self.autoselect:
+        bpy.ops.object.select_all(action='DESELECT')    # déselection de tous les objets
+
+        if self.autoselect:                     # en fonction du choix en important les objets
             for ob in new_selection:
                 ob.select = True
         else:
             for ob in old_selection:
-                ob.select = True
+                ob.select = True                # selectionne tous ou seulement ceux sélectionnés au début
 
         return {'FINISHED'}
 
 
-class ReloadImage(Operator):      #unused class?
+# Recharger les images affichées dans l'editeur d'images + syncroniser les vues 3D
+class ReloadImage(Operator):      # non utilisée
     '''Reload image displayed in image-editor'''
     bl_idname = "paint.reload_image"
     bl_label = "Reload image"
-
+    
+    
     def invoke(self, context, event):
         images = get_images_in_editors(context)
         for img in images:
             img.reload()
 
-        # make the changes immediately visible in 3d-views
-        # image editor updating is handled in get_images_in_editors()
+        # get_images_in_editors() met à jour l'éditor d'image 
+        # Iici on syncronise le changement immédiatement en vue 3d
         for area in context.screen.areas:
             if area.type == 'VIEW_3D':
                 area.tag_redraw()
@@ -1388,8 +1034,9 @@ class ReloadImage(Operator):      #unused class?
         return{'FINISHED'}
 
 
+# Recharge TOUTES LES images de Blender et syncroniser l'editeur d'image et la vue 3D
 class ReloadImages(Operator):
-    '''Reload all images'''
+    '''Reload all images in Blender'''
     bl_idname = "paint.reload_images"
     bl_label = "Reload all images"
 
@@ -1398,7 +1045,8 @@ class ReloadImages(Operator):
         for img in bpy.data.images:
             img.reload()
 
-        # make the changes immediately visible in image editors and 3d-views
+        # Mise a jour immédiate dans l'editeur d'image & en vue 3D
+        # cad rafraichir l'écran des éditeurs
         for area in context.screen.areas:
             if area.type == 'IMAGE_EDITOR' or area.type == 'VIEW_3D':
                 area.tag_redraw()
@@ -1406,14 +1054,111 @@ class ReloadImages(Operator):
         return {'FINISHED'}
 
 
-class SampleColor(Operator):
-    '''Sample color'''
+# Enregistre les images affichées dans l'Editeur d'Images
+class SaveImage(Operator):
+    '''Save image displayed in image-editor'''
+    bl_idname = "paint.save_image"
+    bl_label = "Save image"
+    
+    @classmethod
+    def poll(cls, context):
+        return bpy.ops.paint.image_paint.poll()
+    
+    def invoke(self, context, event):
+        images = get_images_in_editors(context)
+        for img in images:
+            img.save()
+
+        return{'FINISHED'}
+
+
+# Enregistrer TOUTES LES images de Blender quelque soit le context
+# Improved function than official "save_dirty()" function
+class SaveImages(Operator):
+    '''Save all images'''
+    bl_idname = "wm.save_images"
+    bl_label = "Save all images"
+
+    def invoke(self, context, event):
+        saved, withoutpath = 0, 0
+        for img in bpy.data.images:
+            try:
+                image.save()
+                saved += 1
+            except:
+                withoutpath += 1
+                pass
+
+        self.report({'WARNING'}, "Warning: " + str(withoutpath) + " without path and " + str(saved) + " image(s) saved!" )
+
+        return {'FINISHED'}
+
+
+class SaveExtPaintTexture(Operator):
+    bl_idname = "object.save_ext_paint_texture"
+    bl_label = "Save New Image"
+    
+    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+    filename = bpy.props.StringProperty(subtype="FILE_NAME")
+    directory = bpy.props.StringProperty(subtype="DIR_PATH")
+    
+    @classmethod
+    def poll(cls, context):
+        return context.active_object is not None
+    
+    def get_active_image(self, context):
+        active_slot = context.object.active_material.paint_active_slot
+        return context.object.active_material.texture_paint_images[active_slot]
+    
+    def path_exists(self, image_path):
+        ipath = bpy.path.abspath(image_path)
+        if os.path.exists(ipath):
+            return True
+    
+    
+    def invoke(self, context, event):
+        slot_image = self.get_active_image(context)
+        
+        if slot_image.filepath == '' or not self.path_exists(slot_image.filepath):
+            context.window_manager.fileselect_add(self)
+        else:
+            self.execute(context)
+    
+        return {'RUNNING_MODAL'}
+    
+    def execute(self, context):
+        slot_image = self.get_active_image(context)
+        
+        # old area stock
+        area = bpy.context.area
+        old_type, area.type = area.type, "IMAGE_EDITOR"    # Assez génial pour passer de l'image editor to 3Dview
+        context.space_data.image = slot_image
+        
+        # function
+        if slot_image.filepath == '':
+            bpy.ops.image.save_as(filepath=self.filepath)
+            self.report({'INFO'}, "{} saved!".format(slot_image.filepath))
+        else:
+            bpy.ops.image.save_dirty()
+
+        # replace area type
+        area.type = old_type
+        
+        return {"FINISHED"}
+
+
+
+
+##############################################################################
+# Outil pipette personnalisé en enlevant temporairement les masques!
+class SampleColorMaskOff(Operator):
+    '''Sample color without mask'''
     bl_idname = "paint.sample_color_custom"
     bl_label = "Sample color"
 
     @classmethod
     def poll(cls, context):
-        return bpy.ops.paint.image_paint.poll()
+        return bpy.ops.paint.image_paint.poll()            # bon operateur!
 
     def invoke(self, context, event):
         mesh = context.active_object.data
@@ -1425,158 +1170,125 @@ class SampleColor(Operator):
         return {'FINISHED'}
 
 
-class SaveImage(Operator):
-    '''Save image displayed in image-editor'''
-    bl_idname = "paint.save_image"
-    bl_label = "Save image"
+# Défilement de la texture peinte de l'objet ou d'une texture UV ou d'une grille couleur
+class GridTexture(Operator):
+    '''Toggle between current texture / UV / Colour grids'''    # EXCELLENT CODE !
+    bl_idname = "paint.grid_texture"
+    bl_label = "Grid texture"
 
-    def invoke(self, context, event):
-        images = get_images_in_editors(context)
-        for img in images:
-            img.save()
+    @classmethod
+    def poll(cls, context):
+        return bpy.ops.paint.image_paint.poll()
 
-        return{'FINISHED'}
+    def execute(self, context):
+        Egne = bpy.context.scene.render.engine
+        if Egne == 'BLENDER_RENDER':
+            objects = bpy.context.selected_objects
+            meshes = [object.data for object in objects if object.type == 'MESH']  # génial code!
+            if not meshes:
+                self.report({'INFO'}, "Couldn't locate meshes to operate on")
+                return {'CANCELLED'}
 
+            tex_images = []                      # Stocke les images de texture
+            for mesh in meshes:
+                for mat in mesh.materials:
+                    for tex in [ts.texture for ts in mat.texture_slots if ts and ts.texture.type=='IMAGE' and ts.texture.image]:  # génial code!
+                        tex_images.append([tex.name, tex.image.name])
+            if not tex_images:
+                self.report({'INFO'}, "Couldn't locate textures to operate on")
+                return {'CANCELLED'}
 
-class SaveImages(Operator):
-    '''Save all images'''
-    bl_idname = "wm.save_images"
-    bl_label = "Save all images"
+            first_image = bpy.data.images[tex_images[0][1]]
+            if "grid_texture_mode" in first_image:
+                mode = first_image["grid_texture_mode"]
+            else:
+                mode = 1
 
-    def invoke(self, context, event):
-        correct = 0
-        for img in bpy.data.images:
-            try:
-                img.save()
-                correct += 1
-            except:
-                # some images don't have a source path (e.g. render result)
-                pass
+            if mode == 1:
+                # original textures, change to new UV grid
+                width = max([bpy.data.images[image].size[0] for tex, image in tex_images])
+                height = max([bpy.data.images[image].size[1] for tex, image in tex_images])
+                new_image = bpy.data.images.new("temp_grid", width=width, height=height)
 
-        self.report({'INFO'}, "Saved " + str(correct) + " images")
+                new_image.generated_type = 'UV_GRID'
+                new_image["grid_texture"] = tex_images  # ?
+                new_image["grid_texture_mode"] = 2
+                for tex, image in tex_images:
+                    bpy.data.textures[tex].image = new_image
+            elif mode == 2:
+                # change from UV grid to Colour grid
+                first_image.generated_type = 'COLOR_GRID'
+                first_image["grid_texture_mode"] = 3
+            elif mode == 3:
+                # change from Colour grid back to original textures
+                if "grid_texture" not in first_image:
+                    first_image["grid_texture_mode"] = 1
+                    self.report({'ERROR'}, "Couldn't retrieve original images")
+                    return {'FINISHED'}
+                tex_images = first_image["grid_texture"]
+                for tex, image in tex_images:
+                    if tex in bpy.data.textures and image in bpy.data.images:
+                        bpy.data.textures[tex].image = bpy.data.images[image]
+                bpy.data.images.remove(first_image)
+        elif Egne =='CYCLES':
+            # TODO!
+            pass
 
         return {'FINISHED'}
 
 
-class SyncSelection(Operator):
-    '''Sync selection from uv-editor to 3d-view'''
-    bl_idname = "uv.sync_selection"
-    bl_label = "Sync selection"
+# Augmente ou diminue la selection de point/arete/face
+class ChangeSelection(Operator):
+    '''Select more or less vertices/edges/faces, connected to the original selection'''
+    bl_idname = "paint.change_selection"
+    bl_label = "Change selection"
 
-    _timer = None
-    _selection_3d = []
-    handle1 = None
-    handle2 = None
-    handle3 = None
-    area = None
-    region = None
-    overlay_vertices = []
-    overlay_edges = []
-    overlay_faces = []
-    position_vertices = []
-    position_edges = []
-    position_faces = []
-    position2_vertices = []
-    position2_edges = []
-    position2_edges = []
+    # propriété du mode +/- de selection
+    mode = bpy.props.EnumProperty(name="Mode",
+                                  items = (("more", "More", "Select more vertices/edges/faces"),
+                                           ("less", "Less", "Select less vertices/edges/faces")),
+                                  description = "Choose whether the selection should be increased or decreased",
+                                  default = 'more')
 
     @classmethod
     def poll(cls, context):
-        return(context.active_object and context.active_object.mode=='EDIT')
-
-    def modal(self, context, event):
-        if self.area:
-            self.area.tag_redraw()
-        if context.area:
-            context.area.tag_redraw()
-
-        if context.window_manager.tpp.sync_enabled == -1:
-            self.region.callback_remove(self.handle1)
-            self.region.callback_remove(self.handle2)
-            context.region.callback_remove(self.handle3)
-            self.area = None
-            self.region = None
-            context.window_manager.tpp.sync_enabled = 0
-            return {"CANCELLED"}
-
-        return {'PASS_THROUGH'}
+        return bpy.ops.paint.image_paint.poll()
 
     def invoke(self, context, event):
-        if context.window_manager.tpp.sync_enabled < 1:
-            for area in context.screen.areas:
-                if area.type == 'VIEW_3D':
-                    self.area = area
-                    for region in area.regions:
-                        if region.type == 'WINDOW':
-                            self.region = region
-                            context.window_manager.tpp.sync_enabled = 1
+        bpy.ops.object.mode_set(mode='EDIT')            # mise en mode édition
+        if self.mode == 'more':                         # si mode = +
+            bpy.ops.mesh.select_more()
+        else:                                           # si mode = -
+            bpy.ops.mesh.select_less()
+        bpy.ops.object.mode_set(mode='TEXTURE_PAINT')   # retour en mode objet
 
-                            # getting overlay selection
-                            old_sync = context.tool_settings.use_uv_select_sync
-                            old_select_mode = [x for x in context.tool_settings.mesh_select_mode]
-                            context.tool_settings.mesh_select_mode = [True, False, False]
-                            bpy.ops.object.mode_set(mode='OBJECT')
-                            mesh = context.active_object.data
-                            self._selection_3d = [v.index for v in mesh.vertices if v.select]
-                            tfl = mesh.uv_textures.active
-                            selected = []
-                            for mface, tface in zip(mesh.faces, tfl.data):
-                                selected += [mface.vertices[i] for i, x in enumerate(tface.select_uv) if x]
-                            bpy.ops.object.mode_set(mode='EDIT')
-                            bpy.ops.mesh.select_all(action='DESELECT')
-                            bpy.ops.object.mode_set(mode='OBJECT')
-                            context.tool_settings.use_uv_select_sync = True
-                            for v in selected:
-                                mesh.vertices[v].select = True
-
-                            bpy.ops.object.mode_set(mode='EDIT')
-                            bpy.ops.object.mode_set(mode='OBJECT')
-
-                            # indices for overlay in 3d-view
-                            self.overlay_vertices = [vertex.index for vertex in mesh.vertices if vertex.select]
-                            self.overlay_edges = [edge.index for edge in mesh.edges if edge.select]
-                            self.overlay_faces = [face.index for face in mesh.faces if face.select]
-
-                            # overlay positions for image editor
-                            dict_vertex_pos = dict([[i, []] for i in range(len(mesh.vertices))])
-                            tfl = mesh.uv_textures.active
-                            for mface, tface in zip(mesh.faces, tfl.data):
-                                for i, vert in enumerate(mface.vertices):
-                                    dict_vertex_pos[vert].append([co for co in tface.uv[i]])
-
-                            self.position2_vertices = []
-                            for v in self.overlay_vertices:
-                                for pos in dict_vertex_pos[v]:
-                                    self.position2_vertices.append(pos)
-
-                            # set everything back to original state
-                            bpy.ops.object.mode_set(mode='EDIT')
-                            context.tool_settings.use_uv_select_sync = old_sync
-                            bpy.ops.mesh.select_all(action='DESELECT')
-                            bpy.ops.object.mode_set(mode='OBJECT')
-                            for v in self._selection_3d:
-                                mesh.vertices[v].select = True
-                            bpy.ops.object.mode_set(mode='EDIT')
-                            context.tool_settings.mesh_select_mode = old_select_mode
+        return {'FINISHED'}
 
 
-                            # 3d view callbacks
-                            context.window_manager.modal_handler_add(self)
-                            self.handle1 = region.callback_add(sync_calc_callback,
-                                (self, context, area, region), "POST_VIEW")
-                            self.handle2 = region.callback_add(sync_draw_callback,
-                                (self, context), "POST_PIXEL")
+class ToggleToolmodeOnScreen(Operator):
+    '''Draw on the screen tools & blend mode'''
+    bl_idname = "paint.toolmode_on_screen"
+    bl_label = "Draw on screen the blend mode"
 
-                            # image editor callback
-                            self.handle3 = context.region.callback_add(sync_draw_callback2,
-                                (self, context), "POST_VIEW")
+    @classmethod
+    def poll(cls, context):
+        return bpy.ops.paint.image_paint.poll()
+    
+    def invoke(self, context, event):
+        init_temp_props()
+        wm = context.window_manager
+        wm["tpp_toolmode_on_screen"] = True
+        co2d = (event.mouse_region_x, event.mouse_region_y)
+        wm["tpp_toolmode_brushloc"] = co2d
+        
+        args = (self, context)
+        self._handle = bpy.types.SpaceView3D.draw_handler_add(\
+                                                    toolmode_draw_callback,
+                                                    args,
+                                                    'WINDOW',
+                                                    'POST_PIXEL')
+        return {'FINISHED'}
 
-                            break
-                    break
-        else:
-            context.window_manager.tpp.sync_enabled = -1
-
-        return {'RUNNING_MODAL'}
 
 
 class ToggleAddMultiply(Operator):
@@ -1587,15 +1299,26 @@ class ToggleAddMultiply(Operator):
     @classmethod
     def poll(cls, context):
         return bpy.ops.paint.image_paint.poll()
-
+    
     def invoke(self, context, event):
         brush = context.tool_settings.image_paint.brush
-        if brush.blend != 'ADD':
-            brush.blend = 'ADD'
-        else:
+        if brush.blend != 'MUL':
             brush.blend = 'MUL'
-
-        return {'FINISHED'}
+        else:
+            brush.blend = 'ADD'
+        
+        wm = context.window_manager
+        if "tpp_toolmode_on_screen" in wm:
+            init_temp_props()
+            co2d = (event.mouse_region_x, event.mouse_region_y)
+            wm["tpp_toolmode_brushloc"] = co2d
+            args = (self, context)
+            self._handle = bpy.types.SpaceView3D.draw_handler_add(\
+                                                        toolmode_draw_callback,
+                                                        args,
+                                                        'WINDOW',
+                                                        'POST_PIXEL')
+        return {"FINISHED"}
 
 
 class ToggleColorSoftLightScreen(Operator):
@@ -1606,7 +1329,7 @@ class ToggleColorSoftLightScreen(Operator):
     @classmethod
     def poll(cls, context):
         return bpy.ops.paint.image_paint.poll()
-
+    
     def invoke(self, context, event):
         brush = context.tool_settings.image_paint.brush
         if brush.blend != 'COLOR' and brush.blend != 'SOFTLIGHT':
@@ -1615,8 +1338,19 @@ class ToggleColorSoftLightScreen(Operator):
             brush.blend = 'SOFTLIGHT'
         elif brush.blend == 'SOFTLIGHT':
             brush.blend = 'SCREEN'
-
-        return {'FINISHED'}
+        
+        wm = context.window_manager
+        if "tpp_toolmode_on_screen" in wm:
+            init_temp_props()
+            co2d = (event.mouse_region_x, event.mouse_region_y)
+            wm["tpp_toolmode_brushloc"] = co2d
+            args = (self, context)
+            self._handle = bpy.types.SpaceView3D.draw_handler_add(\
+                                                        toolmode_draw_callback,
+                                                        args,
+                                                        'WINDOW',
+                                                        'POST_PIXEL')
+        return{'FINISHED'}
 
 
 class ToggleAlphaMode(Operator):
@@ -1628,17 +1362,98 @@ class ToggleAlphaMode(Operator):
     def poll(cls, context):
         return bpy.ops.paint.image_paint.poll()
 
+
     def invoke(self, context, event):
         brush = context.tool_settings.image_paint.brush
         if brush.blend != 'ERASE_ALPHA':
             brush.blend = 'ERASE_ALPHA'
         else:
             brush.blend = 'ADD_ALPHA'
+        
+        wm = context.window_manager
+        if "tpp_toolmode_on_screen" in wm:
+            init_temp_props()
+            co2d = (event.mouse_region_x, event.mouse_region_y)
+            wm["tpp_toolmode_brushloc"] = co2d
+            args = (self, context)
+            self._handle = bpy.types.SpaceView3D.draw_handler_add(\
+                                                        toolmode_draw_callback,
+                                                        args,
+                                                        'WINDOW',
+                                                        'POST_PIXEL')
+        return{'FINISHED'}
+
+
+# init blend mode
+class InitPaintBlend(Operator):
+    '''Init to mix paint  mode'''
+    bl_idname = "paint.init_blend_mode"
+    bl_label = "Init paint blend mode"
+
+    @classmethod
+    def poll(cls, context):
+        return bpy.ops.paint.image_paint.poll()
+
+    def invoke(self, context, event):
+        brush = context.tool_settings.image_paint.brush
+        brush.blend = 'MIX'
+        
+        wm = context.window_manager
+        if "tpp_toolmode_on_screen" in wm:
+            init_temp_props()
+            co2d = (event.mouse_region_x, event.mouse_region_y)
+            wm["tpp_toolmode_brushloc"] = co2d
+            args = (self, context)
+            self._handle = bpy.types.SpaceView3D.draw_handler_add(\
+                                                        toolmode_draw_callback,
+                                                        args,
+                                                        'WINDOW',
+                                                        'POST_PIXEL')
+        return{'FINISHED'}
+
+
+
+#-----------------------------------------------------------# in UV/image editor
+# in UV/Image editor
+class UVSelectSync(Operator):
+    '''Toggle use_uv_select_sync in the UV editor'''
+    bl_idname = "uv.uv_select_sync"
+    bl_label = "UV Select Sync"
+
+    @classmethod
+    def poll(self, context):
+        A = context.space_data.type == 'IMAGE_EDITOR'
+        B = context.space_data.show_uvedit
+        return A and B 
+
+    def execute(self, context):
+        context.scene.tool_settings.use_uv_select_sync = not context.scene.tool_settings.use_uv_select_sync
 
         return {'FINISHED'}
 
 
-class ToggleImagePaint(bpy.types.Operator):
+# Active par defaut la fusion d'UVs entre iles du mesh in Paint mode
+class AutoMergeUV(Operator):
+    '''Have UV Merge enabled by default for merge actions'''
+    bl_idname = "paint.auto_merge_uv"
+    bl_label = "AutoMerge UV"
+
+    def invoke(self, context, event):
+        wm = context.window_manager
+        if "tpp_automergeuv" not in wm:
+            init_temp_props()
+        wm["tpp_automergeuv"] = True
+
+        km = bpy.context.window_manager.keyconfigs.default.keymaps['Mesh']
+        for kmi in km.keymap_items:
+            if kmi.idname == "mesh.merge":
+                kmi.properties.uvs = True
+
+        return {'FINISHED'}
+
+
+# in UV/image editor
+class ToggleImagePaint(Operator):
     '''Toggle image painting in the UV/Image editor'''
     bl_idname = "paint.toggle_image_paint"
     bl_label = "Image Painting"
@@ -1658,121 +1473,26 @@ class ToggleImagePaint(bpy.types.Operator):
         return {'FINISHED'}
 
 
-class InitPaintBlend(bpy.types.Operator):
-    '''Toggle between Add Alpha and Erase Alpha blend modes'''
-    bl_idname = "paint.init_blend_mode"
-    bl_label = "Init paint blend mode"
-
-    @classmethod
-    def poll(cls, context):
-        return bpy.ops.paint.image_paint.poll()
-
-    def invoke(self, context, event):
-        brush = context.tool_settings.image_paint.brush
-        brush.blend = 'MIX'
-
-        return {'FINISHED'}
-
-
-class ToggleUVSelectSync(Operator):
-    '''Toggle use_uv_select_sync in the UV editor'''
-    bl_idname = "uv.toggle_uv_select_sync"
-    bl_label = "UV Select Sync"
-
-    @classmethod
-    def poll(cls, context):
-        return(context.space_data.type == 'IMAGE_EDITOR')
-
-    def invoke(self, context, event):
-        context.tool_settings.use_uv_select_sync = not context.tool_settings.use_uv_select_sync
-
-        return {'FINISHED'}
-
 
 
 ##########################################
 #                                        #
-# User Properties                        #
+#              New UI Menus              #
 #                                        #
 ##########################################
 
-# property group containing all properties of the add-on
-class TexturePaintPlusProps(bpy.types.PropertyGroup):
-
-    sync_enabled = bpy.props.IntProperty(name = "Enabled",
-                                        description = "internal use",
-                                        default = 0)
-
-    toolmode_enabled = bpy.props.IntProperty(name = "Enabled",
-                                            description = "internal use",
-                                            default = 0)
-
-    toolmode_mode = bpy.props.StringProperty(name = "Mode",
-                                            description = "internal use",
-                                            default = "")
-
-    toolmode_tool = bpy.props.StringProperty(name = "Tool",
-                                            description = "internal use",
-                                            default = "")
-
-    line_last = bpy.props.BoolProperty(name = "Last_f",
-                                       description = "Last position valid",
-                                       default = False)
-
-    line_x = bpy.props.IntProperty(name = "Last_x",
-                                   description = "Last position X",
-                                   default = 0)
-
-    line_y = bpy.props.IntProperty(name = "Last_y",
-                                   description = "Last position y",
-                                   default = 0)
-
-
-
-#legend:
-#(--) =  No shortcut!
-classes =   [AddDefaultImage,                #add defauft paint image (Shift ALt X) 3DVIEW
-            AutoMergeUV,                    #add "autofusion UVs" in >> UI>Mesh menu [EDIT MODE] (--)
-            MakeBrushImageTexture,          #add a paint texture (--)
-            MakeBrushImageTextureMask,      #add a mask paint texture (--)
-
-            BrushPopup,                     #brush panel (W) PAINT
-            TexturePopup,                   #textures et mask panel (Alt W) PAINT
-            Slots_projectpaint,             #images slots panel (Shift W) PAINT
-            ChangeSelection,                #multi-selections in UI Blender (--)
-
-            DefaultMaterial,                #add a default material (Ctrl Alt X) 3DVIEW
-            GridTexture,                    #show an UV grid texture (G) PAINT
-            MassLinkAppend,                 #add several images folder (Ctrl F1) WINDOW
-            ReloadImage,                    #reload active paint image [unused?] ========================
-            ReloadImages,                   #reload all paint images (Ctrl Alt R) WINDOW
-            SampleColor,                    #color sample tool (OS clic droit) PAINT
-            SaveImage,                      #save paint image (ALt S) PAINT
-            SaveImages,                     #save all paint images (Ctrl Alt S) WINDOW
-            SyncSelection,                  #[unused?] 3DVIEW-EDIT  =======================
-            ToggleUVSelectSync,             #[unused?] IMAGE_EDITOR =======================
-            ToggleAddMultiply,              #Toggle Add/Multiply paint mode (D) PAINT
-            ToggleColorSoftLightScreen,     #Toggle Color*softlight paint mode (shift D) PAINT
-            ToggleAlphaMode,                #Toggle AddAlpha/EraseAlpha paint mode (A) PAINT
-            ToggleImagePaint,               #Cyclic image/paint/mask  mode (B) IMAGE_EDITOR
-            InitPaintBlend,                 #Reinit mix paint mode (Alt D) PAINT
-            SelectVertgroup,                #Select active vertex group in Texture Paint mode
-            DeselectVertgroup,              #Deselect active vertex group in Texture paint mode
-            TexturePaintPlusProps]          #toutes les variables de l'addon
-
-
-
-
-def menu_func(self, context):               #Add to UI>Mesh menu [EDIT MODE] => checkbox "Automerge uv"
+# Ajouter dans UI > Menu Mesh  [MODE EDITION] => case à cocher "Automerge uv"
+def menu_func(self, context):
     layout = self.layout
     wm = context.window_manager
 
-    AME = "tpp_automergeuv"  in wm
+    AME = "tpp_automergeuv"  in wm    # Astucieux! utilise "in"
     Icon = 'CHECKBOX_HLT' if AME else 'CHECKBOX_DEHLT'
     layout.operator("paint.auto_merge_uv", icon = Icon)
 
 
-def menu_mesh_select_mode(self, context):   #Add to Selection mode Menu (ctrl Tab) [EDIT MODE] => multi-selections
+# Ajouter au menu des modes de Selection (ctrl Tab) [MODE EDITION] => les multi-selections
+def menu_mesh_select_mode(self, context):
     layout = self.layout
     layout.separator()
 
@@ -1795,7 +1515,8 @@ def menu_mesh_select_mode(self, context):   #Add to Selection mode Menu (ctrl Ta
     prop.data_path = "tool_settings.mesh_select_mode"
 
 
-def menu_snap(self, context):               #Add to Snap menu (Shift S)[OBJECT MODE]  => object origins changes
+# Ajouter au menu aimantation (Shift S)[MODE OBJET]  => changer les origines de l'objet
+def menu_snap(self, context):
     layout = self.layout
     layout.separator()
     layout.operator("object.origin_set", text="Geometry to Origin")
@@ -1803,123 +1524,147 @@ def menu_snap(self, context):               #Add to Snap menu (Shift S)[OBJECT M
     layout.operator("object.origin_set", text="Origin to 3D Cursor").type = 'ORIGIN_CURSOR'
 
 
+
+
+##########################################
+#                                        #
+#             CLASSES LIST               #
+#                                        #
+##########################################
+
+classes =   [BrushPopup,                    #brush panel (W) PAINT
+            TexturePopup,                   #textures et mask panel (Alt W) PAINT
+            ProjectpaintPopup,              #images slots panel (Shift W) PAINT
+            
+            AddDefaultMatDiff,              #add a mat + defauft paint image (Shift ALt X) 3DVIEW
+            DefaultMaterial,                #add a mat + 3 textures DIFF/SPEC/NORM (Ctrl Alt X) 3DVIEW
+            MakeBrushImageTexture,          #Load a new image as paint texture (panel button)
+            MakeBrushImageTextureMask,      #Load a new image as mask paint texture (panel button)
+            MassLinkAppend,                 #add several linked objects from .blend folder (Ctrl F1) WINDOW
+            
+            ReloadImage,                    #reload active paint image (Alt R ) [IMAGE EDITOR]
+            ReloadImages,                   #reload all paint images (Ctrl Alt R) [IMAGE EDITOR]
+            
+            SaveImages,                     #save all paint images (Ctrl Alt S) WINDOW => "save_dirty()" clearer!
+            SaveExtPaintTexture,            #save externaly the new image in Cycles (panel button) [PAINT MODE]
+            
+            SampleColorMaskOff,             #Colorsample to paint immediately, different to colorsample S (OS + clic droit) PAINT
+            GridTexture,                    #Toggle between paint image, UV image and grid image (G) PAINT [BI]
+            ChangeSelection,                #Augmenter/diminuer les selections (alt + / alt -) [PAINT MODE] 3Dview
+            
+            ToggleToolmodeOnScreen,         #Toggle display the toolsmode options (Shift M) PAINT
+            ToggleAddMultiply,              #Toggle Add/Multiply paint mode (D) PAINT
+            ToggleColorSoftLightScreen,     #Toggle Color*softlight paint mode (shift D) PAINT
+            ToggleAlphaMode,                #Toggle AddAlpha/EraseAlpha paint mode (A) PAINT
+            InitPaintBlend,                 #Re-init default mix paint mode (Alt D) PAINT
+            
+            SaveImage,                      #save paint image (ALt S) [IMAGE EDITOR] 
+            UVSelectSync,             #Toggle the UVsync property ( Alt I ) UV_EDITOR
+            AutoMergeUV,                    #UI > Menu Mesh  => "Automerge uv" [Shift I) [PAINT MODE]
+            ToggleImagePaint]               #Cyclic image/paint/mask  mode (B) IMAGE_EDITOR
+                                            # Toggle "Use mipmaps" ( Y ) [PAINT MODE] 3Dview
+#legend:
+#(--) =  No shortcut!
+
+addon_keymaps = []
+
+# kmi_defs entry: (identifier, key, action, CTRL, SHIFT, ALT, OSKEY , props, nice name)
+# props entry: ,((property name, property value), (property name, property value), ...),....
+kmi_defs = (
+    # Save all images [Window] with: Ctrl + Alt S.
+    (('Window', 'EMPTY'), "wm.save_images", 'S', 'PRESS', True, False, True, False, None, "Save dirty all images"),
+    # Add linked assets from .blend files folders [Image Paint] with: Ctrl + F1.
+    (('Window', 'EMPTY'), "wm.mass_link_append", 'F1', 'PRESS', True, False, False, False, None, "Add linked assets from .blend files folders"),
+    # Brushes Popup [Image Paint] with: W.
+    (('Image Paint', 'EMPTY'), "view3d.brush_popup", 'W', 'PRESS', False, False, False, False, None, "Brushes Popup"),
+    # Slots Popup [Image Paint] with: Shift + W.
+    (('Image Paint', 'EMPTY'), "view3d.projectpaint", 'W', 'PRESS', False, True, False, False, None, "Slots Popup"),
+    # Textures Popup [Image Paint] with: Alt + W.
+    (('Image Paint', 'EMPTY'), "view3d.texture_popup", 'W', 'PRESS', False, False, True, False, None, "Textures Popup"),
+    # Reload just the current image [Image Paint] with: Alt + R.
+    (('Image Paint', 'EMPTY'), "paint.reload_image", 'R', 'PRESS', False, False, True, False, None, "Reload just the current image"),
+    # Reload all images [Image Paint] with: Ctrl + Alt + R.
+    (('Image Paint', 'EMPTY'), "paint.reload_images", 'R', 'PRESS', True, False, True, False, None, "Reload all images"),
+    # Sample Colors Customly [Image Paint] with: Os key + RIGHTMOUSE
+    (('Image Paint', 'EMPTY'), "paint.sample_color_custom", 'RIGHTMOUSE', 'PRESS', False, False, False, True, None, "Sample Colors Customly"),
+    # Toggle paint/UVs/Grid textures [Image Paint] with: G.
+    (('Image Paint', 'EMPTY'), "paint.grid_texture", 'G', 'PRESS', False, False, False, False, None, "Toggle paint/UVs/Grid textures"),
+    # Toggle crease faces selections  [Image Paint] with: Ctrl +.
+    (('Image Paint', 'EMPTY'), "paint.change_selection", 'NUMPAD_PLUS', 'PRESS', True, False, False, False, (('mode','more'),), "Toggle crease faces selections"),
+    # Toggle decrease selections  [Image Paint] with: Ctrl -.
+    (('Image Paint', 'EMPTY'), "paint.change_selection", 'NUMPAD_MINUS', 'PRESS', True, False, False, False, (('mode','less'),), "Toggle decrease faces selections"),
+    # Display the tools & modes on screen [Image Paint] with: Shift + M.
+    (('Image Paint', 'EMPTY'), "paint.toolmode_on_screen", 'M', 'PRESS', False, True, False, False, None, "Display the tools & modes on screen"),
+    # Toggle add/multily modes [Image Paint] with: D.
+    (('Image Paint', 'EMPTY'), "paint.toggle_add_multiply", 'D', 'PRESS', False, False, False, False, None, "Toggle add/multiply modes"),
+    # Toggle color/soft light modes [Image Paint] with: Ctrl + D
+    (('Image Paint', 'EMPTY'), "paint.toggle_color_soft_light_screen", 'D', 'PRESS', False, True, False, False, None, "Toggle color/soft light modes"),
+    # Toggle Alpha modes [Image Paint] with: A.
+    (('Image Paint', 'EMPTY'), "paint.toggle_alpha_mode", 'A', 'PRESS', False, False, False, False, None, "Toggle Alpha modes"),
+    # Re-init Mix mode [Image Paint] with: Alt + D.
+    (('Image Paint', 'EMPTY'), "paint.init_blend_mode", 'D', 'PRESS', False, False, True, False, None, "Re-init Mix mode"),
+    # Save the current image [Image Editor] with: Alt + S.
+    (('Image Generic', 'IMAGE_EDITOR'), "paint.save_image", 'S', 'PRESS', False, False, True, False, None, "Save the current image"),
+    # Merge Auto UVs [Image Paint] with: Y.
+    (('Image Paint', 'EMPTY'), "wm.context_toggle", 'I', 'PRESS', False, True, False, False, (('data_path','paint.auto_merge_uv'),), "Merge Auto UVs"),
+    # Use Mipmaps [Image Paint] with: Shift + I.
+    (('Image Paint', 'EMPTY'), "wm.context_toggle", 'Y', 'PRESS', False, False, False, False, (('data_path','user_preferences.system.use_mipmaps'),), "Use Mipmaps"),
+    # Sync. 3Dview with UVs Editor [UV Editor] with: Alt + I.
+    (('UV Editor', 'EMPTY'), "uv.uv_select_sync", 'I', 'PRESS', False, False, True, False, None, "Sync. 3Dview with UVs Editor")
+)
+
+def Register_Shortcuts():
+    addon_keymaps.clear()
+    kc = bpy.context.window_manager.keyconfigs.addon
+    if kc:
+        # for each kmi_def:
+        for (spacetype, identifier, key, action, CTRL, SHIFT, ALT, OS_KEY, props, nicename) in kmi_defs:
+            if spacetype[0] in bpy.context.window_manager.keyconfigs.addon.keymaps.keys():
+                if spacetype[1] in kc.keymaps[spacetype[0]].space_type:
+                    km = kc.keymaps[spacetype[0]]
+            else:
+                km = kc.keymaps.new(name = spacetype[0], space_type = spacetype[1])
+            kmi = km.keymap_items.new(identifier, key, action, ctrl=CTRL, shift=SHIFT, alt=ALT, oskey=OS_KEY)
+            if props:
+                for prop, value in props:
+                    setattr(kmi.properties, prop, value)
+            addon_keymaps.append((km, kmi))
+
+
+##########################################
+#                                        #
+# REGISTER FUNCTIONS                     #
+#                                        #
+##########################################
+
 def register():
-    import bpy
-    # register classes
-    init_props()
-    for c in classes:
-        bpy.utils.register_class(c)
-    bpy.types.WindowManager.tpp = bpy.props.PointerProperty(\
-                                                type = TexturePaintPlusProps)
-
-    # add ImagePaint keymap entries
-    km = bpy.context.window_manager.keyconfigs.default.keymaps['Image Paint']
-    kmi = km.keymap_items.new("paint.toggle_alpha_mode", 'A', 'PRESS') #ok
-    kmi = km.keymap_items.new("wm.context_toggle", 'B', 'PRESS')
-    kmi.properties.data_path = "user_preferences.system.use_mipmaps"
-    kmi = km.keymap_items.new("paint.toggle_add_multiply", 'D', 'PRESS')#ok
-    kmi = km.keymap_items.new("paint.toggle_color_soft_light_screen", 'D', 'PRESS', shift=True)#ok
-    kmi = km.keymap_items.new("paint.init_blend_mode", 'D', 'PRESS', alt=True)#ok
-    kmi = km.keymap_items.new("paint.sample_color_custom", 'RIGHTMOUSE', 'PRESS', oskey=True)
-    kmi = km.keymap_items.new("paint.grid_texture", 'G', 'PRESS')
-    kmi = km.keymap_items.new("paint.save_image", 'S', 'PRESS', alt=True) #?
-    kmi = km.keymap_items.new("view3d.brush_popup", 'W', 'PRESS')#ok
-    kmi = km.keymap_items.new("view3d.texture_popup", 'W', 'PRESS', alt=True)#ok
-    kmi = km.keymap_items.new("slots.projectpaint", 'W', 'PRESS', shift=True)#ok
-
-    # add 3DView keymap entries
-    km = bpy.context.window_manager.keyconfigs.default.keymaps['3D View']
-    kmi = km.keymap_items.new("object.default_material", 'X', 'PRESS', alt=True, ctrl=True)
-    kmi = km.keymap_items.new("object.add_default_image", 'X', 'PRESS', shift=True, alt=True) #ok object.add_default_image
-
-    # deactivate to prevent clashing------------------------------------
-    km = bpy.context.window_manager.keyconfigs.default.keymaps['Window']
-    for kmi in km.keymap_items:
-        if kmi.type == 'S' and not kmi.any and not kmi.shift and kmi.ctrl and kmi.alt and not kmi.oskey:
-            kmi.active = False
-
-    # add Window keymap entry
-    km = bpy.context.window_manager.keyconfigs.default.keymaps['Window']
-    kmi = km.keymap_items.new("wm.mass_link_append", 'F1', 'PRESS', ctrl=True)#ok
-    kmi = km.keymap_items.new("paint.reload_images", 'R', 'PRESS', alt=True, ctrl=True)#ok
-    kmi = km.keymap_items.new("image.save_dirty", 'S','PRESS', alt=True, ctrl=True)#ok
-
-
-    # deactivate and remap to prevent clashing -------------------------
-    if bpy.context.user_preferences.inputs.select_mouse == 'RIGHT':
-        right_mouse = ['RIGHTMOUSE', 'SELECTIONMOUSE']
-    else: #'LEFT'
-        right_mouse = ['RIGHTMOUSE', 'ACTIONMOUSE']
-    km = bpy.context.window_manager.keyconfigs.default.keymaps['3D View']
-    for kmi in km.keymap_items:
-        if kmi.type in right_mouse and kmi.alt and not kmi.ctrl and not kmi.shift:
-            # deactivate
-            kmi.active = False
-    for kmi in km.keymap_items:
-        if kmi.type in right_mouse and not kmi.alt and not kmi.ctrl and not kmi.shift:
-            # remap
-            kmi.alt = True
-
-    # add menu entries
+    init_temp_props()
+    bpy.utils.register_module(__name__)
+    
+    # keymaps
+    Register_Shortcuts()
+    
+    # add menu entries 
     bpy.types.VIEW3D_MT_edit_mesh.prepend(menu_func)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.append(menu_mesh_select_mode)
-    bpy.types.VIEW3D_MT_snap.append(menu_snap)
+    bpy.types.VIEW3D_MT_snap.append(menu_snap) 
 
 
 def unregister():
+    remove_temp_props()
+    
+    # keymaps
+    for km, kmi in addon_keymaps:
+        km.keymap_items.remove(kmi)
+    addon_keymaps.clear()
+
     # menu entries
     bpy.types.VIEW3D_MT_snap.remove(menu_snap)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.remove(menu_mesh_select_mode)
     bpy.types.VIEW3D_MT_edit_mesh.remove(menu_func)
-
-    # ImagePaint keymap entries
-    km = bpy.context.window_manager.keyconfigs.default.keymaps['Image Paint']
-    for kmi in km.keymap_items:
-        if kmi.idname in ["view3d.brush_popup", "view3d.texture_popup", "paint.toggle_alpha_mode",  "paint.sample_color_custom",
-        "paint.toggle_add_multiply", "paint.toggle_color_soft_light_screen", "paint.init_blend_mode", "paint.grid_texture", "paint.reload_image", "paint.save_image"]:
-            km.keymap_items.remove(kmi)
-        elif kmi.idname == "wm.context_toggle":
-            if getattr(kmi.properties, "data_path", False) in [ "active_object.show_wire", "user_preferences.system.use_mipmaps"]:
-                km.keymap_items.remove(kmi)
-        elif kmi.idname == "wm.context_set_enum":
-            if getattr(kmi.properties, "data_path", False) in ["tool_settings.image_paint.brush.blend"]:
-                km.keymap_items.remove(kmi)
-
-    # 3DView keymap entry
-    km = bpy.context.window_manager.keyconfigs.default.keymaps['3D View']
-    for kmi in km.keymap_items:
-        if kmi.idname in ["object.add_default_image", "object.default_material"]:
-            km.keymap_items.remove(kmi)
-
-    # remap and reactivate original items
-    if bpy.context.user_preferences.inputs.select_mouse == 'RIGHT':
-        right_mouse = ['RIGHTMOUSE', 'SELECTIONMOUSE']
-    else: #'LEFT'
-        right_mouse = ['RIGHTMOUSE', 'ACTIONMOUSE']
-    km = bpy.context.window_manager.keyconfigs.default.keymaps['3D View']
-    for kmi in km.keymap_items:
-        if kmi.type in right_mouse and kmi.alt and not kmi.ctrl and not kmi.shift:
-            if kmi.active:
-                # remap
-                kmi.alt = False
-            else:
-                # reactivate
-                kmi.active = True
-
-    # reactive original item
-    km = bpy.context.window_manager.keyconfigs.default.keymaps['Window']
-    for kmi in km.keymap_items:
-        if kmi.type == 'S' and not kmi.any and not kmi.shift and kmi.ctrl and kmi.alt and not kmi.oskey:
-            kmi.active = True
-
-    # unregister classes
-    remove_props()
-    for c in classes:
-        bpy.utils.unregister_class(c)
-    try:
-        del bpy.types.WindowManager.tpp
-    except:
-        pass
+    
+    # Remove module
+    bpy.utils.unregister_module(__name__)
 
 if __name__ == "__main__":
     register()
