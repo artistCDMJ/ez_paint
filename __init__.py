@@ -24,9 +24,9 @@
 
 bl_info = {
     'name': 'Texture Paint plus',
-    'author': 'Bart Crouch, scorpion81, Spirou4D',
+    'author': 'Bart Crouch, scorpion81, Spirou4D, artistCDMJ',
     'version': (3, 00),
-    'blender': (2, 78, 0),
+    'blender': (2, 79, 0),
     'location': 'Paint editor > 3D view',
     'warning': '',
     'description': 'Several improvements for PAINT MODE',
