@@ -1412,6 +1412,40 @@ class InitPaintBlend(Operator):
         return{'FINISHED'}
 
 
+#-----------------------------------------------------------#special Image Editor Popup
+
+class DisplayActivePaintSlot(bpy.types.Operator):
+    '''Display selected paint slot in new window'''
+    bl_label = "Display active Slot"
+    bl_idname = "paint.display_active_slot"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(self, context):
+        return context.object.active_material.texture_paint_images
+    
+    def execute(self, context):
+        if context.object.active_material.texture_paint_images:
+            # Get the Image
+            mat = bpy.context.object.active_material
+            image = mat.texture_paint_images[mat.paint_active_slot]
+            # Call user prefs window
+            bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
+            # Change area type
+            area = context.window_manager.windows[-1].screen.areas[0]
+            area.type = 'IMAGE_EDITOR'
+            # Assign the Image
+            context.area.spaces.active.image = image
+        else:
+            self.report({'INFO'}, "No active Slot")
+        return {'FINISHED'}
+
+'''def draw_display_slot_operator(self, context):
+    if context.object.active_material.texture_paint_images:
+        layout = self.layout
+        row = layout.row(align=True)
+        row.operator(DisplaySelectedPaintSlot.bl_idname, icon='IMAGE_COL')'''
+
 
 #-----------------------------------------------------------# in UV/image editor
 # in UV/Image editor
@@ -1533,6 +1567,7 @@ def menu_snap(self, context):
 ##########################################
 
 classes =   [BrushPopup,                    #brush panel (W) PAINT
+            DisplayActivePaintSlot,         #2d Editor Popup for Active Paint Slot
             TexturePopup,                   #textures et mask panel (Alt W) PAINT
             ProjectpaintPopup,              #images slots panel (Shift W) PAINT
             
@@ -1577,6 +1612,8 @@ kmi_defs = (
     (('Window', 'EMPTY'), "wm.mass_link_append", 'F1', 'PRESS', True, False, False, False, None, "Add linked assets from .blend files folders"),
     # Brushes Popup [Image Paint] with: W.
     (('Image Paint', 'EMPTY'), "view3d.brush_popup", 'W', 'PRESS', False, False, False, False, None, "Brushes Popup"),
+    # 2D Editor Popup with Active Paint Slot with Shift + Alt + W
+    (('Image Paint', 'EMPTY'), "paint.display_active_slot", 'W', 'PRESS', False, True, True, False, None, "2D Editort Popup"),
     # Slots Popup [Image Paint] with: Shift + W.
     (('Image Paint', 'EMPTY'), "view3d.projectpaint", 'W', 'PRESS', False, True, False, False, None, "Slots Popup"),
     # Textures Popup [Image Paint] with: Alt + W.
@@ -1648,6 +1685,8 @@ def register():
     bpy.types.VIEW3D_MT_edit_mesh.prepend(menu_func)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.append(menu_mesh_select_mode)
     bpy.types.VIEW3D_MT_snap.append(menu_snap) 
+    #bpy.utils.register_class(DisplayActivePaintSlot)
+    #bpy.types.VIEW3D_PT_slots_projectpaint.prepend(draw_display_slot_operator)
 
 
 def unregister():
@@ -1662,6 +1701,8 @@ def unregister():
     bpy.types.VIEW3D_MT_snap.remove(menu_snap)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.remove(menu_mesh_select_mode)
     bpy.types.VIEW3D_MT_edit_mesh.remove(menu_func)
+    #bpy.utils.unregister_class(DisplayActivePaintSlot)
+    #bpy.types.VIEW3D_PT_slots_projectpaint.remove(draw_display_slot_operator)
     
     # Remove module
     bpy.utils.unregister_module(__name__)
