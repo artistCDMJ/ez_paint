@@ -1413,6 +1413,8 @@ class InitPaintBlend(Operator):
 
 
 #-----------------------------------------------------------#special Image Editor Popup
+# from https://blender.stackexchange.com/questions/94099/how-do-i-get-a-popup-uv-image-editor\
+#-and-force-it-to-show-the-active-paint-slot/94109?noredirect=1#comment166373_94109
 
 class DisplayActivePaintSlot(bpy.types.Operator):
     '''Display selected paint slot in new window'''
