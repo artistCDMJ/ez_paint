@@ -1436,6 +1436,7 @@ class DisplayActivePaintSlot(bpy.types.Operator):
             # Change area type
             area = context.window_manager.windows[-1].screen.areas[0]
             area.type = 'IMAGE_EDITOR'
+            context.space_data.mode = 'PAINT'
             # Assign the Image
             context.area.spaces.active.image = image
         else:
