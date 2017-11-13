@@ -23,9 +23,9 @@
 
 
 bl_info = {
-    'name': 'Texture Paint plus',
-    'author': 'Bart Crouch, scorpion81, Spirou4D, artistCDMJ',
-    'version': (3, 00),
+    'name': 'EZ_PAINT',
+    'author': 'Bart Crouch, scorpion81, Spirou4D, artistCDMJ, brockmann',
+    'version': (3, 10),
     'blender': (2, 79, 0),
     'location': 'Paint editor > 3D view',
     'warning': '',
@@ -39,7 +39,7 @@ import bgl, blf, bpy, mathutils, os, time, copy, math
 
 from bpy.types import Operator, Menu, Panel, UIList
 from bpy_extras.io_utils import ImportHelper
- 
+
 
 #################################################
 #                                               #
@@ -82,7 +82,7 @@ def toolmode_draw_callback(self, context):
         "LUMINOSITY": "Luminosity",
         "COLOR": "Color"
     }                               # dictionnaire des modes de fusion
-    
+
     wm = context.window_manager
     brush = context.tool_settings.image_paint.brush
     bhn, bhb = brush.name, brush.blend
@@ -95,12 +95,12 @@ def toolmode_draw_callback(self, context):
     blf.draw(0, text)
 
     # Texte estompé selon le temps, au dessus de la brosse à 40px en rouge
-    dt = time.time() - wm["tpp_toolmode_time"]
+    dt = time.time() - wm["ezp_toolmode_time"]
     if dt < 2:    # Aténuation de l'affichage selon le temps
-        if "tpp_toolmode_brushloc" not in wm:
+        if "ezp_toolmode_brushloc" not in wm:
             return
-        
-        brush_x, brush_y = wm["tpp_toolmode_brushloc"]
+
+        brush_x, brush_y = wm["ezp_toolmode_brushloc"]
         brush_x -= blf.dimensions(0, text)[0] / 2
         bgl.glColor4f(0.9, 0.16, 0.16, min(1.0, (2 - dt)*2))
         blf.position(0, brush_x, brush_y + 40, 0)
@@ -112,26 +112,26 @@ def toolmode_draw_callback(self, context):
 # ajouter une propriété d'ID au gestionnaire de fenêtre
 def init_temp_props():
     wm = bpy.context.window_manager
-    wm["tpp_automergeuv"] = False                 # 1 int
-    wm["tpp_toolmode_time"] = time.time()         # 1 int in sec
-    wm["tpp_toolmode_brushloc"] = (-1, -1)        # 2 int
+    wm["ezp_automergeuv"] = False                 # 1 int
+    wm["ezp_toolmode_time"] = time.time()         # 1 int in sec
+    wm["ezp_toolmode_brushloc"] = (-1, -1)        # 2 int
 
 
 
 # enlever toutes propriétés d'ID du gestionnaire de fenêtres
 def remove_temp_props():
     wm = bpy.context.window_manager
-    if "tpp_automergeuv" in wm:
-        del wm["tpp_automergeuv"]
-        
-    if "tpp_toolmode_time" in wm:
-        del wm["tpp_toolmode_time"]
-        
-    if "tpp_toolmode_brushloc" in wm:
-        del wm["tpp_toolmode_brushloc"]
-        
-    if "tpp_toolmode_on_screen" in wm:
-        del wm["tpp_toolmode_on_screen"]
+    if "ezp_automergeuv" in wm:
+        del wm["ezp_automergeuv"]
+
+    if "ezp_toolmode_time" in wm:
+        del wm["ezp_toolmode_time"]
+
+    if "ezp_toolmode_brushloc" in wm:
+        del wm["ezp_toolmode_brushloc"]
+
+    if "ezp_toolmode_on_screen" in wm:
+        del wm["ezp_toolmode_on_screen"]
 
 
 # -----------------------------------------------------------------------------
@@ -162,14 +162,14 @@ def get_images_in_editors(context):
 class BrushPopup(Operator):
     """Brush popup"""
     bl_idname = "view3d.brush_popup"
-    bl_label = "Brush settings" 
+    bl_label = "Brush settings"
     COMPAT_ENGINES = {'BLENDER_RENDER', 'CYCLES'}
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
     def poll(self, context):
         if context.active_object:
-            A = context.active_object.type == 'MESH' 
+            A = context.active_object.type == 'MESH'
             B = context.mode in {'PAINT_TEXTURE','PAINT_VERTEX','PAINT_WEIGHT'}
             return A and B
 
@@ -178,7 +178,7 @@ class BrushPopup(Operator):
         return True
 
 
-    @staticmethod  
+    @staticmethod
     def paint_settings(context):
         toolsettings = context.tool_settings
 
@@ -369,10 +369,10 @@ class BrushPopup(Operator):
         # Init values
         toolsettings = context.tool_settings
         settings = self.paint_settings(context)
-        
+
         layout = self.layout
         col = layout.column()
-        
+
         if not settings:
             row = col.row(align=True)
             row.label(text="Setup texture paint, please!")
@@ -381,34 +381,34 @@ class BrushPopup(Operator):
             ipaint = toolsettings.image_paint
             # Stroke mode
             col.prop(brush, "stroke_method", text="")
-    
+
             if brush.use_anchor:
                 col.separator()
                 col.prop(brush, "use_edge_to_edge", "Edge To Edge")
-    
+
             if brush.use_airbrush:
                 col.separator()
                 col.prop(brush, "rate", text="Rate", slider=True)
-    
+
             if brush.use_space:
                 col.separator()
                 row = col.row(align=True)
                 row.prop(brush, "spacing", text="Spacing")
                 row.prop(brush, "use_pressure_spacing", toggle=True, text="")
-    
+
             if brush.use_line or brush.use_curve:
                 col.separator()
                 row = col.row(align=True)
                 row.prop(brush, "spacing", text="Spacing")
-    
+
             if brush.use_curve:
                 col.separator()
                 col.template_ID(brush, "paint_curve", new="paintcurve.new")
                 col.operator("paintcurve.draw")
-    
+
             else:
                 col.separator()
-    
+
                 row = col.row(align=True)
                 row.prop(brush, "use_relative_jitter", icon_only=True)
                 if brush.use_relative_jitter:
@@ -416,20 +416,20 @@ class BrushPopup(Operator):
                 else:
                     row.prop(brush, "jitter_absolute")
                 row.prop(brush, "use_pressure_jitter", toggle=True, text="")
-    
+
                 col = layout.column()
                 col.separator()
-    
+
                 if brush.brush_capabilities.has_smooth_stroke:
                     col.prop(brush, "use_smooth_stroke")
-    
+
                     sub = col.column()
                     sub.active = brush.use_smooth_stroke
                     sub.prop(brush, "smooth_stroke_radius", text="Radius", slider=True)
                     sub.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
-    
+
             layout.prop(settings, "input_samples")
-    
+
             # Curve stroke
             col = layout.column(align=True)
             row = col.row(align=True)
@@ -439,54 +439,54 @@ class BrushPopup(Operator):
             row.operator("brush.curve_preset", icon='SHARPCURVE', text="").shape = 'SHARP'
             row.operator("brush.curve_preset", icon='LINCURVE', text="").shape = 'LINE'
             row.operator("brush.curve_preset", icon='NOCURVE', text="").shape = 'MAX'
-    
+
             # Symetries mode
-            col = layout.column(align=True) 
+            col = layout.column(align=True)
             row = col.row(align=True)
             row.prop(ipaint, "use_symmetry_x", text="X", toggle=True)
             row.prop(ipaint, "use_symmetry_y", text="Y", toggle=True)
-            row.prop(ipaint, "use_symmetry_z", text="Z", toggle=True) 
-    
-            # imagepaint tool operate  buttons: UILayout.template_ID_preview()  
-            col = layout.split().column() 
-            ###################################### ICI PROBLEME d'icones de brosse !  
+            row.prop(ipaint, "use_symmetry_z", text="Z", toggle=True)
+
+            # imagepaint tool operate  buttons: UILayout.template_ID_preview()
+            col = layout.split().column()
+            ###################################### ICI PROBLEME d'icones de brosse !
             # bpy.context.tool_settings.image_paint.brush
-            
+
             col.template_ID_preview(settings, "brush", new="brush.add", rows=1, cols=3   )
-            
-            ######################################################################## 
-             
-            # Texture Paint Mode # 
+
+            ########################################################################
+
+            # Texture Paint Mode #
             if context.image_paint_object and brush:
                 self.brush_texpaint_common( layout, context, brush, settings, True)
-    
+
             ########################################################################
             # Weight Paint Mode #
             elif context.weight_paint_object and brush:
-    
+
                 col = layout.column()
-    
+
                 row = col.row(align=True)
                 self.prop_unified_weight(row, context, brush, "weight", slider=True, text="Weight")
-    
+
                 row = col.row(align=True)
                 self.prop_unified_size(row, context, brush, "size", slider=True, text="Radius")
                 self.prop_unified_size(row, context, brush, "use_pressure_size")
-    
+
                 row = col.row(align=True)
                 self.prop_unified_strength(row, context, brush, "strength", text="Strength")
                 self.prop_unified_strength(row, context, brush, "use_pressure_strength")
-    
+
                 col.prop(brush, "vertex_tool", text="Blend")
-    
+
                 if brush.vertex_tool == 'BLUR':
                     col.prop(brush, "use_accumulate")
                     col.separator()
-    
+
                 col = layout.column()
                 col.prop(toolsettings, "use_auto_normalize", text="Auto Normalize")
                 col.prop(toolsettings, "use_multipaint", text="Multi-Paint")
-    
+
             ########################################################################
             # Vertex Paint Mode #
             elif context.vertex_paint_object and brush:
@@ -495,29 +495,29 @@ class BrushPopup(Operator):
                 if settings.palette:
                     col.template_palette(settings, "palette", color=True)
                 self.prop_unified_color(col, context, brush, "color", text="")
-    
+
                 col.separator()
                 row = col.row(align=True)
                 self.prop_unified_size(row, context, brush, "size", slider=True, text="Radius")
                 self.prop_unified_size(row, context, brush, "use_pressure_size")
-    
+
                 row = col.row(align=True)
                 self.prop_unified_strength(row, context, brush, "strength", text="Strength")
                 self.prop_unified_strength(row, context, brush, "use_pressure_strength")
-    
+
                 col.separator()
                 col.prop(brush, "vertex_tool", text="Blend")
-    
+
                 col.separator()
                 col.template_ID(settings, "palette", new="palette.new")
 
 
 
 
-    def invoke(self, context, event): 
+    def invoke(self, context, event):
         if context.space_data.type == 'IMAGE_EDITOR':
             context.space_data.mode = 'PAINT'
-             
+
         return context.window_manager.invoke_props_dialog(self, width=148)
         # return {'PASS_THROUGH'} ou {'CANCELLED'} si le bouton ok est cliqué
 
@@ -683,9 +683,9 @@ class ProjectpaintPopup(Operator):
     def draw(self, context):
         settings = context.tool_settings.image_paint
         ob = context.active_object
-        
+
         Egne = bpy.context.scene.render.engine
-        
+
         layout = self.layout
         #-----------------------------------------------------------Vertex Paint
         ob = context.object
@@ -705,18 +705,18 @@ class ProjectpaintPopup(Operator):
             col.separator()
             col.operator("object.vertex_group_move", icon='TRIA_UP', text="").direction = 'UP'
             col.operator("object.vertex_group_move", icon='TRIA_DOWN', text="").direction = 'DOWN'
-            
+
         if ob.vertex_groups and (ob.mode == 'EDIT' or (ob.mode == 'WEIGHT_PAINT' and ob.type == 'MESH' and ob.data.use_paint_mask_vertex)):
             row = layout.row()
-        
+
             sub = row.row(align=True)
             sub.operator("object.vertex_group_assign", text="Assign")
             sub.operator("object.vertex_group_remove_from", text="Remove")
-        
+
             sub = row.row(align=True)
             sub.operator("object.vertex_group_select", text="Select")
             sub.operator("object.vertex_group_deselect", text="Deselect")
-        
+
             layout.prop(context.tool_settings, "vertex_group_weight", text="Weight")
 
 
@@ -726,39 +726,39 @@ class ProjectpaintPopup(Operator):
             col.label("Painting Mode")
             col.prop(settings, "mode", text="")
             col.separator()
-    
+
             if settings.mode == 'MATERIAL':
                 if len(ob.material_slots) > 1:
                     col.label("Materials")
                     col.template_list("MATERIAL_UL_matslots", "layers",
                                       ob, "material_slots",
                                       ob, "active_material_index", rows=2)
-    
+
                 mat = ob.active_material
                 if mat:
                     col.label("Available Paint Slots")
                     col.template_list("TEXTURE_UL_texpaintslots", "",
                                       mat, "texture_paint_images",
                                       mat, "paint_active_slot", rows=2)
-    
+
                     if mat.texture_paint_slots:
                         slot = mat.texture_paint_slots[mat.paint_active_slot]
                     else:
                         slot = None
-    
+
                     if (not mat.use_nodes) and context.scene.render.engine in {'BLENDER_RENDER', 'BLENDER_GAME'}:
                         row = col.row(align=True)
                         row.operator_menu_enum("paint.add_texture_paint_slot", "type")
                         row.operator("paint.delete_texture_paint_slot", text="", icon='X')
-    
+
                         if slot:
                             col.prop(mat.texture_slots[slot.index], "blend_type")
                             col.separator()
-    
+
                     if slot and slot.index != -1:
                         col.label("UV Map")
                         col.prop_search(slot, "uv_layer", ob.data, "uv_textures", text="")
-    
+
             elif settings.mode == 'IMAGE':
                 mesh = ob.data
                 uv_text = mesh.uv_textures.active.name if mesh.uv_textures.active else ""
@@ -767,7 +767,7 @@ class ProjectpaintPopup(Operator):
                 col.operator("image.new", text="New").gen_context = 'PAINT_CANVAS'
                 col.label("UV Map")
                 col.menu("VIEW3D_MT_tools_projectpaint_uvlayer", text=uv_text, translate=False)
-    
+
             col.separator()
             if Egne == 'CYCLES':
                 col.operator("paint.add_texture_paint_slot", text="Add Texture", icon="FACESEL_HLT").type="DIFFUSE_COLOR"
@@ -861,7 +861,7 @@ class DefaultMaterial(Operator):
         return {'FINISHED'}
 
 class MakeBrushImageTexture(Operator):
-    bl_label = "New Texture from Image"                 
+    bl_label = "New Texture from Image"
     bl_idname = "gizmo.image_texture"
 
     filepath = bpy.props.StringProperty(subtype="FILE_PATH")
@@ -879,18 +879,18 @@ class MakeBrushImageTexture(Operator):
         tex.node_tree.links.new(tex.node_tree.nodes[0].inputs[0],tex.node_tree.nodes[1].outputs[0])
         tex.node_tree.nodes[1].location = [0,50]
         tex.node_tree.nodes[0].location = [200,50]
-    
+
         i = bpy.data.images.load(self.filepath)
         tex.node_tree.nodes[1].image = i
-    
+
         if bpy.context.mode == 'PAINT_TEXTURE':
             bpy.context.tool_settings.image_paint.brush.texture = tex
+        elif bpy.context.mode == 'PAINT_VERTEX':
+            bpy.context.tool_settings.vertex_paint.brush.texture = tex
+        elif bpy.context.mode == 'PAINT_WEIGHT':
+            bpy.context.tool_settings.weight_paint.brush.texture = tex
         #elif bpy.context.mode == 'SCULPT':
             #bpy.context.tool_settings.sculpt.brush.texture = tex
-        #elif bpy.context.mode == 'PAINT_VERTEX':
-            #bpy.context.tool_settings.vertex_paint.brush.texture = tex
-        #elif bpy.context.mode == 'PAINT_WEIGHT':
-            #bpy.context.tool_settings.weight_paint.brush.texture = tex
 
         return set()
 
@@ -924,12 +924,12 @@ class MakeBrushImageTextureMask(Operator):
 
         if bpy.context.mode == 'PAINT_TEXTURE':
             bpy.context.tool_settings.image_paint.brush.mask_texture = tex
+        elif bpy.context.mode == 'PAINT_VERTEX':
+            bpy.context.tool_settings.vertex_paint.brush.mask_texture = tex
+        elif bpy.context.mode == 'PAINT_WEIGHT':
+            bpy.context.tool_settings.weight_paint.brush.mask_texture = tex
         #elif bpy.context.mode == 'SCULPT':
             #bpy.context.tool_settings.sculpt.brush.mask_texture = tex
-        #elif bpy.context.mode == 'PAINT_VERTEX':
-            #bpy.context.tool_settings.vertex_paint.brush.mask_texture = tex
-        #elif bpy.context.mode == 'PAINT_WEIGHT':
-            #bpy.context.tool_settings.weight_paint.brush.mask_texture = tex
 
         return set()
 
@@ -1018,14 +1018,14 @@ class ReloadImage(Operator):      # non utilisée
     '''Reload image displayed in image-editor'''
     bl_idname = "paint.reload_image"
     bl_label = "Reload image"
-    
-    
+
+
     def invoke(self, context, event):
         images = get_images_in_editors(context)
         for img in images:
             img.reload()
 
-        # get_images_in_editors() met à jour l'éditor d'image 
+        # get_images_in_editors() met à jour l'éditor d'image
         # Iici on syncronise le changement immédiatement en vue 3d
         for area in context.screen.areas:
             if area.type == 'VIEW_3D':
@@ -1059,11 +1059,11 @@ class SaveImage(Operator):
     '''Save image displayed in image-editor'''
     bl_idname = "paint.save_image"
     bl_label = "Save image"
-    
+
     @classmethod
     def poll(cls, context):
         return bpy.ops.paint.image_paint.poll()
-    
+
     def invoke(self, context, event):
         images = get_images_in_editors(context)
         for img in images:
@@ -1097,43 +1097,43 @@ class SaveImages(Operator):
 class SaveExtPaintTexture(Operator):
     bl_idname = "object.save_ext_paint_texture"
     bl_label = "Save New Image"
-    
+
     filepath = bpy.props.StringProperty(subtype="FILE_PATH")
     filename = bpy.props.StringProperty(subtype="FILE_NAME")
     directory = bpy.props.StringProperty(subtype="DIR_PATH")
-    
+
     @classmethod
     def poll(cls, context):
         return context.active_object is not None
-    
+
     def get_active_image(self, context):
         active_slot = context.object.active_material.paint_active_slot
         return context.object.active_material.texture_paint_images[active_slot]
-    
+
     def path_exists(self, image_path):
         ipath = bpy.path.abspath(image_path)
         if os.path.exists(ipath):
             return True
-    
-    
+
+
     def invoke(self, context, event):
         slot_image = self.get_active_image(context)
-        
+
         if slot_image.filepath == '' or not self.path_exists(slot_image.filepath):
             context.window_manager.fileselect_add(self)
         else:
             self.execute(context)
-    
+
         return {'RUNNING_MODAL'}
-    
+
     def execute(self, context):
         slot_image = self.get_active_image(context)
-        
+
         # old area stock
         area = bpy.context.area
         old_type, area.type = area.type, "IMAGE_EDITOR"    # Assez génial pour passer de l'image editor to 3Dview
         context.space_data.image = slot_image
-        
+
         # function
         if slot_image.filepath == '':
             bpy.ops.image.save_as(filepath=self.filepath)
@@ -1143,7 +1143,7 @@ class SaveExtPaintTexture(Operator):
 
         # replace area type
         area.type = old_type
-        
+
         return {"FINISHED"}
 
 
@@ -1273,14 +1273,14 @@ class ToggleToolmodeOnScreen(Operator):
     @classmethod
     def poll(cls, context):
         return bpy.ops.paint.image_paint.poll()
-    
+
     def invoke(self, context, event):
         init_temp_props()
         wm = context.window_manager
-        wm["tpp_toolmode_on_screen"] = True
+        wm["ezp_toolmode_on_screen"] = True
         co2d = (event.mouse_region_x, event.mouse_region_y)
-        wm["tpp_toolmode_brushloc"] = co2d
-        
+        wm["ezp_toolmode_brushloc"] = co2d
+
         args = (self, context)
         self._handle = bpy.types.SpaceView3D.draw_handler_add(\
                                                     toolmode_draw_callback,
@@ -1299,19 +1299,19 @@ class ToggleAddMultiply(Operator):
     @classmethod
     def poll(cls, context):
         return bpy.ops.paint.image_paint.poll()
-    
+
     def invoke(self, context, event):
         brush = context.tool_settings.image_paint.brush
         if brush.blend != 'MUL':
             brush.blend = 'MUL'
         else:
             brush.blend = 'ADD'
-        
+
         wm = context.window_manager
-        if "tpp_toolmode_on_screen" in wm:
+        if "ezp_toolmode_on_screen" in wm:
             init_temp_props()
             co2d = (event.mouse_region_x, event.mouse_region_y)
-            wm["tpp_toolmode_brushloc"] = co2d
+            wm["ezp_toolmode_brushloc"] = co2d
             args = (self, context)
             self._handle = bpy.types.SpaceView3D.draw_handler_add(\
                                                         toolmode_draw_callback,
@@ -1329,7 +1329,7 @@ class ToggleColorSoftLightScreen(Operator):
     @classmethod
     def poll(cls, context):
         return bpy.ops.paint.image_paint.poll()
-    
+
     def invoke(self, context, event):
         brush = context.tool_settings.image_paint.brush
         if brush.blend != 'COLOR' and brush.blend != 'SOFTLIGHT':
@@ -1338,12 +1338,12 @@ class ToggleColorSoftLightScreen(Operator):
             brush.blend = 'SOFTLIGHT'
         elif brush.blend == 'SOFTLIGHT':
             brush.blend = 'SCREEN'
-        
+
         wm = context.window_manager
-        if "tpp_toolmode_on_screen" in wm:
+        if "ezp_toolmode_on_screen" in wm:
             init_temp_props()
             co2d = (event.mouse_region_x, event.mouse_region_y)
-            wm["tpp_toolmode_brushloc"] = co2d
+            wm["ezp_toolmode_brushloc"] = co2d
             args = (self, context)
             self._handle = bpy.types.SpaceView3D.draw_handler_add(\
                                                         toolmode_draw_callback,
@@ -1369,12 +1369,12 @@ class ToggleAlphaMode(Operator):
             brush.blend = 'ERASE_ALPHA'
         else:
             brush.blend = 'ADD_ALPHA'
-        
+
         wm = context.window_manager
-        if "tpp_toolmode_on_screen" in wm:
+        if "ezp_toolmode_on_screen" in wm:
             init_temp_props()
             co2d = (event.mouse_region_x, event.mouse_region_y)
-            wm["tpp_toolmode_brushloc"] = co2d
+            wm["ezp_toolmode_brushloc"] = co2d
             args = (self, context)
             self._handle = bpy.types.SpaceView3D.draw_handler_add(\
                                                         toolmode_draw_callback,
@@ -1397,12 +1397,12 @@ class InitPaintBlend(Operator):
     def invoke(self, context, event):
         brush = context.tool_settings.image_paint.brush
         brush.blend = 'MIX'
-        
+
         wm = context.window_manager
-        if "tpp_toolmode_on_screen" in wm:
+        if "ezp_toolmode_on_screen" in wm:
             init_temp_props()
             co2d = (event.mouse_region_x, event.mouse_region_y)
-            wm["tpp_toolmode_brushloc"] = co2d
+            wm["ezp_toolmode_brushloc"] = co2d
             args = (self, context)
             self._handle = bpy.types.SpaceView3D.draw_handler_add(\
                                                         toolmode_draw_callback,
@@ -1411,43 +1411,6 @@ class InitPaintBlend(Operator):
                                                         'POST_PIXEL')
         return{'FINISHED'}
 
-
-#-----------------------------------------------------------#special Image Editor Popup
-# from https://blender.stackexchange.com/questions/94099/how-do-i-get-a-popup-uv-image-editor\
-#-and-force-it-to-show-the-active-paint-slot/94109?noredirect=1#comment166373_94109
-
-class DisplayActivePaintSlot(bpy.types.Operator):
-    '''Display selected paint slot in new window'''
-    bl_label = "Display active Slot"
-    bl_idname = "paint.display_active_slot"
-    bl_options = {'REGISTER', 'UNDO'}
-    
-    @classmethod
-    def poll(self, context):
-        return context.object.active_material.texture_paint_images
-    
-    def execute(self, context):
-        if context.object.active_material.texture_paint_images:
-            # Get the Image
-            mat = bpy.context.object.active_material
-            image = mat.texture_paint_images[mat.paint_active_slot]
-            # Call user prefs window
-            bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
-            # Change area type
-            area = context.window_manager.windows[-1].screen.areas[0]
-            area.type = 'IMAGE_EDITOR'
-            context.space_data.mode = 'PAINT'
-            # Assign the Image
-            context.area.spaces.active.image = image
-        else:
-            self.report({'INFO'}, "No active Slot")
-        return {'FINISHED'}
-
-'''def draw_display_slot_operator(self, context):
-    if context.object.active_material.texture_paint_images:
-        layout = self.layout
-        row = layout.row(align=True)
-        row.operator(DisplaySelectedPaintSlot.bl_idname, icon='IMAGE_COL')'''
 
 
 #-----------------------------------------------------------# in UV/image editor
@@ -1461,7 +1424,7 @@ class UVSelectSync(Operator):
     def poll(self, context):
         A = context.space_data.type == 'IMAGE_EDITOR'
         B = context.space_data.show_uvedit
-        return A and B 
+        return A and B
 
     def execute(self, context):
         context.scene.tool_settings.use_uv_select_sync = not context.scene.tool_settings.use_uv_select_sync
@@ -1477,9 +1440,9 @@ class AutoMergeUV(Operator):
 
     def invoke(self, context, event):
         wm = context.window_manager
-        if "tpp_automergeuv" not in wm:
+        if "ezp_automergeuv" not in wm:
             init_temp_props()
-        wm["tpp_automergeuv"] = True
+        wm["ezp_automergeuv"] = True
 
         km = bpy.context.window_manager.keyconfigs.default.keymaps['Mesh']
         for kmi in km.keymap_items:
@@ -1510,6 +1473,35 @@ class ToggleImagePaint(Operator):
         return {'FINISHED'}
 
 
+#-----------------------------------------------------------#special Image Editor Popup
+
+class DisplayActivePaintSlot(Operator):
+    '''Display selected paint slot in new window'''
+    bl_label = "Display active Slot"
+    bl_idname = "paint.display_active_slot"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(self, context):
+        return context.object.active_material.texture_paint_images
+
+    def execute(self, context):
+        if context.object.active_material.texture_paint_images:
+            # Get the Image
+            mat = bpy.context.object.active_material
+            image = mat.texture_paint_images[mat.paint_active_slot]
+            # Call user prefs window
+            bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
+            # Change area type
+            area = context.window_manager.windows[-1].screen.areas[0]
+            area.type = 'IMAGE_EDITOR'
+            # Assign the Image
+            context.area.spaces.active.image = image
+            context.space_data.mode = 'PAINT'
+        else:
+            self.report({'INFO'}, "No active Slot")
+        return {'FINISHED'}
+
 
 
 ##########################################
@@ -1523,7 +1515,7 @@ def menu_func(self, context):
     layout = self.layout
     wm = context.window_manager
 
-    AME = "tpp_automergeuv"  in wm    # Astucieux! utilise "in"
+    AME = "ezp_automergeuv"  in wm    # Astucieux! utilise "in"
     Icon = 'CHECKBOX_HLT' if AME else 'CHECKBOX_DEHLT'
     layout.operator("paint.auto_merge_uv", icon = Icon)
 
@@ -1561,6 +1553,12 @@ def menu_snap(self, context):
     layout.operator("object.origin_set", text="Origin to 3D Cursor").type = 'ORIGIN_CURSOR'
 
 
+# Ajouter au menu VUE  =>  les slots selectionnés
+def draw_display_slot_operator(self, context):
+    if context.object.active_material.texture_paint_images:
+        layout = self.layout
+        row = layout.row(align=True)
+        row.operator("paint.display_active_slot", text="UV Texture Editor", icon='IMAGE_COL')
 
 
 ##########################################
@@ -1570,33 +1568,33 @@ def menu_snap(self, context):
 ##########################################
 
 classes =   [BrushPopup,                    #brush panel (W) PAINT
-            DisplayActivePaintSlot,         #2d Editor Popup for Active Paint Slot
+            DisplayActivePaintSlot,         #2d Editor Popup for Active Paint Slot (Shift Alt W) PAINT
             TexturePopup,                   #textures et mask panel (Alt W) PAINT
             ProjectpaintPopup,              #images slots panel (Shift W) PAINT
-            
+
             AddDefaultMatDiff,              #add a mat + defauft paint image (Shift ALt X) 3DVIEW
             DefaultMaterial,                #add a mat + 3 textures DIFF/SPEC/NORM (Ctrl Alt X) 3DVIEW
             MakeBrushImageTexture,          #Load a new image as paint texture (panel button)
             MakeBrushImageTextureMask,      #Load a new image as mask paint texture (panel button)
             MassLinkAppend,                 #add several linked objects from .blend folder (Ctrl F1) WINDOW
-            
+
             ReloadImage,                    #reload active paint image (Alt R ) [IMAGE EDITOR]
             ReloadImages,                   #reload all paint images (Ctrl Alt R) [IMAGE EDITOR]
-            
+
             SaveImages,                     #save all paint images (Ctrl Alt S) WINDOW => "save_dirty()" clearer!
             SaveExtPaintTexture,            #save externaly the new image in Cycles (panel button) [PAINT MODE]
-            
+
             SampleColorMaskOff,             #Colorsample to paint immediately, different to colorsample S (OS + clic droit) PAINT
             GridTexture,                    #Toggle between paint image, UV image and grid image (G) PAINT [BI]
             ChangeSelection,                #Augmenter/diminuer les selections (alt + / alt -) [PAINT MODE] 3Dview
-            
+
             ToggleToolmodeOnScreen,         #Toggle display the toolsmode options (Shift M) PAINT
             ToggleAddMultiply,              #Toggle Add/Multiply paint mode (D) PAINT
             ToggleColorSoftLightScreen,     #Toggle Color*softlight paint mode (shift D) PAINT
             ToggleAlphaMode,                #Toggle AddAlpha/EraseAlpha paint mode (A) PAINT
             InitPaintBlend,                 #Re-init default mix paint mode (Alt D) PAINT
-            
-            SaveImage,                      #save paint image (ALt S) [IMAGE EDITOR] 
+
+            SaveImage,                      #save paint image (ALt S) [IMAGE EDITOR]
             UVSelectSync,             #Toggle the UVsync property ( Alt I ) UV_EDITOR
             AutoMergeUV,                    #UI > Menu Mesh  => "Automerge uv" [Shift I) [PAINT MODE]
             ToggleImagePaint]               #Cyclic image/paint/mask  mode (B) IMAGE_EDITOR
@@ -1616,7 +1614,7 @@ kmi_defs = (
     # Brushes Popup [Image Paint] with: W.
     (('Image Paint', 'EMPTY'), "view3d.brush_popup", 'W', 'PRESS', False, False, False, False, None, "Brushes Popup"),
     # 2D Editor Popup with Active Paint Slot with Shift + Alt + W
-    (('Image Paint', 'EMPTY'), "paint.display_active_slot", 'W', 'PRESS', False, True, True, False, None, "2D Editort Popup"),
+    (('Image Paint', 'EMPTY'), "paint.display_active_slot", 'W', 'PRESS', False, True, True, False, None, "2D Editor Popup"),
     # Slots Popup [Image Paint] with: Shift + W.
     (('Image Paint', 'EMPTY'), "view3d.projectpaint", 'W', 'PRESS', False, True, False, False, None, "Slots Popup"),
     # Textures Popup [Image Paint] with: Alt + W.
@@ -1680,33 +1678,31 @@ def Register_Shortcuts():
 def register():
     init_temp_props()
     bpy.utils.register_module(__name__)
-    
+
     # keymaps
     Register_Shortcuts()
-    
-    # add menu entries 
+
+    # add menu entries
     bpy.types.VIEW3D_MT_edit_mesh.prepend(menu_func)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.append(menu_mesh_select_mode)
-    bpy.types.VIEW3D_MT_snap.append(menu_snap) 
-    #bpy.utils.register_class(DisplayActivePaintSlot)
-    #bpy.types.VIEW3D_PT_slots_projectpaint.prepend(draw_display_slot_operator)
+    bpy.types.VIEW3D_MT_snap.append(menu_snap)
+    bpy.types.VIEW3D_PT_slots_projectpaint.prepend(draw_display_slot_operator)
 
 
 def unregister():
     remove_temp_props()
-    
+
     # keymaps
     for km, kmi in addon_keymaps:
         km.keymap_items.remove(kmi)
     addon_keymaps.clear()
 
     # menu entries
+    bpy.types.VIEW3D_PT_slots_projectpaint.remove(draw_display_slot_operator)
     bpy.types.VIEW3D_MT_snap.remove(menu_snap)
     bpy.types.VIEW3D_MT_edit_mesh_select_mode.remove(menu_mesh_select_mode)
     bpy.types.VIEW3D_MT_edit_mesh.remove(menu_func)
-    #bpy.utils.unregister_class(DisplayActivePaintSlot)
-    #bpy.types.VIEW3D_PT_slots_projectpaint.remove(draw_display_slot_operator)
-    
+
     # Remove module
     bpy.utils.unregister_module(__name__)
 
