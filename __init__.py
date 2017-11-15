@@ -1484,6 +1484,8 @@ class ToggleImagePaint(Operator):
 
 
 #-----------------------------------------------------------#special Image Editor Popup
+#https://blender.stackexchange.com/questions/94099/
+#how-do-i-get-a-popup-uv-image-editor-and-force-it-to-show-the-active-paint-slot/94109#94109
 
 class DisplayActivePaintSlot(Operator):
     '''Display selected paint slot in new window'''
