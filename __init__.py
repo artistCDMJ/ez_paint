@@ -23,8 +23,8 @@
 
 
 bl_info = {
-    'name': 'EZ_PAINT',
-    'author': 'Bart Crouch, scorpion81, Spirou4D, artistCDMJ, brockmann',
+    'name': 'EZ_Paint',
+    'author': 'Bart Crouch, scorpion81, Spirou4D, artistCDMJ, brickmann',
     'version': (3, 10),
     'blender': (2, 79, 0),
     'location': 'Paint editor > 3D view',
@@ -422,11 +422,10 @@ class BrushPopup(Operator):
 
                 if brush.brush_capabilities.has_smooth_stroke:
                     col.prop(brush, "use_smooth_stroke")
-
-                    sub = col.column()
-                    sub.active = brush.use_smooth_stroke
-                    sub.prop(brush, "smooth_stroke_radius", text="Radius", slider=True)
-                    sub.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
+                    if brush.use_smooth_stroke:
+                        sub = col.column()
+                        sub.prop(brush, "smooth_stroke_radius", text="Radius", slider=True)
+                        sub.prop(brush, "smooth_stroke_factor", text="Factor", slider=True)
 
             layout.prop(settings, "input_samples")
 
@@ -556,7 +555,7 @@ class TexturePopup(Operator):
         unified = toolsettings.unified_paint_settings
         settings = toolsettings.image_paint
 
-        # textures panel
+        # ================================================== textures panel
         layout = self.layout
 
         # Parameter Toggle Menu
@@ -569,6 +568,11 @@ class TexturePopup(Operator):
         if self.toggleMenu:
             col = layout.column()                                   #TEXTURES
             col.template_ID_preview(brush, "texture", new="texture.new", rows=3, cols=8)
+
+            if brush.texture:
+                row = layout.row(align=True)
+                row.operator("paint.modify_brush_textures", text="Modify brush Texture", icon='IMAGE_COL').toggleType=True
+
             layout.label(text="Brush Mapping:")
 
             # texture_map_mode
@@ -588,7 +592,8 @@ class TexturePopup(Operator):
                 if tex_slot.has_texture_angle_source:
                     col.prop(tex_slot, "use_rake", text="Rake")
 
-                    if brush.brush_capabilities.has_random_texture_angle and tex_slot.has_random_texture_angle:
+                    if brush.brush_capabilities.has_random_texture_angle \
+                                        and tex_slot.has_random_texture_angle:
                         col.prop(tex_slot, "use_random", text="Random")
                         if tex_slot.use_random:
                             col.prop(tex_slot, "random_angle", text="")
@@ -605,6 +610,11 @@ class TexturePopup(Operator):
             col = layout.column()                                 #MASK TEXTURE
             col.template_ID_preview(brush, "mask_texture", new="texture.new", \
                                                                 rows=3, cols=8)
+
+            if brush.mask_texture:
+                row = layout.row(align=True)
+                row.operator("paint.modify_brush_textures", text="Modify brush Texture", icon='IMAGE_COL').toggleType=False
+
             layout.label(text="Mask Mapping:")
             # map_mode
             layout.row().prop(mask_tex_slot, "mask_map_mode", text="")
@@ -1192,7 +1202,7 @@ class GridTexture(Operator):
             tex_images = []                      # Stocke les images de texture
             for mesh in meshes:
                 for mat in mesh.materials:
-                    for tex in [ts.texture for ts in mat.texture_slots if ts and ts.texture.type=='IMAGE' and ts.texture.image]:  # génial code!
+                    for tex in [ts.texture for ts in mat.texture_slots if ts and ts.texture.type=='IMAGE' and ts.texture.image]:  # Wonderful code!
                         tex_images.append([tex.name, tex.image.name])
             if not tex_images:
                 self.report({'INFO'}, "Couldn't locate textures to operate on")
@@ -1502,7 +1512,56 @@ class DisplayActivePaintSlot(Operator):
             self.report({'INFO'}, "No active Slot")
         return {'FINISHED'}
 
+#-----------------------------------------------------------#Modify Texture/mask image
+def find_brush(context):                 # Trouver la brosse
+    tool_settings = context.tool_settings
+    if context.mode == 'SCULPT':
+        return tool_settings.sculpt.brush
+    elif context.mode == 'PAINT_TEXTURE':
+        return tool_settings.image_paint.brush
+    elif context.mode == 'PAINT_VERTEX':
+        return tool_settings.vertex_paint.brush
+    else:
+        return None
 
+
+class ModifyBrushTextures(Operator):
+    '''Modify Active Brush Textures in new window'''
+    bl_label = "Modify active Brush Texture"
+    bl_idname = "paint.modify_brush_textures"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    toggleType = bpy.props.BoolProperty(default=True)  # toogle texture or Mask menu
+
+    @classmethod
+    def poll(cls, context):
+        brush = find_brush(context)
+        return brush
+
+    def execute(self, context):
+        brush = find_brush(context)
+        name_tex = brush.texture_slot.name
+        name_mask = brush.mask_texture_slot.name
+
+
+        if brush:
+            # Get the brush Texture
+            j = -1
+            tux  = name_tex if self.toggleType else  name_mask
+            for i in range(len(bpy.data.textures)):
+                 if bpy.data.textures[i].name == tux:
+                    j = i
+
+            # Call user prefs window
+            bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
+            area = context.window_manager.windows[-1].screen.areas[0]
+            area.type = 'IMAGE_EDITOR'
+            if j != -1:
+                context.area.spaces.active.image = bpy.data.images[j]
+            context.space_data.mode = 'PAINT'
+        else:
+            self.report({'INFO'}, "No selected texture")
+        return {'FINISHED'}
 
 ##########################################
 #                                        #
@@ -1553,7 +1612,7 @@ def menu_snap(self, context):
     layout.operator("object.origin_set", text="Origin to 3D Cursor").type = 'ORIGIN_CURSOR'
 
 
-# Ajouter au menu VUE  =>  les slots selectionnés
+# Ajouter au menu SLOTS  =>  le bouton d'un UV Texture Editor.
 def draw_display_slot_operator(self, context):
     if context.object.active_material.texture_paint_images:
         layout = self.layout
