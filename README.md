@@ -1,1 +1,1 @@
-# texture_paint_plus
+# EZ Paint, an improved version of Texture Paint Plus for Blender
