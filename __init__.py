@@ -25,8 +25,8 @@
 bl_info = {
     'name': 'EZ_Paint',
     'author': 'Bart Crouch, scorpion81, Spirou4D, artistCDMJ, brickmann',
-    'version': (3, 2, 0),
-    'blender': (2, 79, 0),
+    'version': (3, 4, 0),
+    'blender': (2, 80, 0),
     'location': 'Paint editor > 3D view',
     'warning': '',
     'description': 'Several improvements for PAINT MODE',
@@ -213,7 +213,7 @@ def get_images_in_editors(context):
 
 ###############################################################################
 # PANNEAU DES OUTILS DE PEINTURE
-class BrushPopup(Operator):
+class  PAINT_OT_BrushPopup(Operator):
     """Brush popup"""
     bl_idname = "view3d.brush_popup"
     bl_label = "Brush settings"
@@ -579,7 +579,7 @@ class BrushPopup(Operator):
 
 
 # PANNEAU DES MASQUES DE PEINTURE
-class TexturePopup(Operator):
+class PAINT_OT_TexturePopup(Operator):
     """Texture popup"""
     bl_idname = "view3d.texture_popup"
     bl_label = "Texture & Mask"
@@ -712,7 +712,7 @@ class TexturePopup(Operator):
 
 
 # PANNEAU DES PROJECTPAINT SLOTS (& Blender MASKs)
-class ProjectpaintPopup(Operator):
+class PAINT_OT_ProjectpaintPopup(Operator):
     """Slots ProjectPaint popup"""
     bl_idname = "view3d.projectpaint"
     bl_label = "Slots & VGroups"
@@ -850,7 +850,7 @@ class ProjectpaintPopup(Operator):
 
 ################################################################################
 # Ajouter un mat + 1 texture DIFF 1024x1024-alpha à l'objet selectionné
-class AddDefaultMatDiff(Operator):
+class PAINT_OT_AddDefaultMatDiff(Operator):
     '''Create and assign a new mat + DIFF texture to the object'''
     bl_idname = "object.add_default_image"
     bl_label = "Add default image"
@@ -879,7 +879,7 @@ class AddDefaultMatDiff(Operator):
         return {'FINISHED'}
 
 # Ajouter un mat standart + 3 textures DIFF/SPEC/NORM sans image à tous les objets selectionnés
-class DefaultMaterial(Operator):
+class PAINT_OT_DefaultMaterial(Operator):
     '''Add a default dif/spec/normal material to an object'''
     bl_idname = "object.default_material"
     bl_label = "Default material"
@@ -924,7 +924,7 @@ class DefaultMaterial(Operator):
 
         return {'FINISHED'}
 
-class MakeBrushImageTexture(Operator):
+class PAINT_OT_MakeBrushImageTexture(Operator):
     bl_label = "New Texture from Image"
     bl_idname = "gizmo.image_texture"
 
@@ -959,7 +959,7 @@ class MakeBrushImageTexture(Operator):
         return set()
 
 
-class MakeBrushImageTextureMask(Operator):
+class PAINT_OT_MakeBrushImageTextureMask(Operator):
     bl_label = "New Mask Texture from Image"
     bl_idname = "gizmo.image_texture_mask"
 
@@ -1000,7 +1000,7 @@ class MakeBrushImageTextureMask(Operator):
 
 
 # Importer en même temps tous les objets de plusieurs [fichiers .blend étant dans un dossier]!
-class MassLinkAppend(Operator, ImportHelper):
+class PAINT_OT_MassLinkAppend(Operator, ImportHelper):
     '''Import objects from multiple blend-files at the same time'''
     bl_idname = "wm.mass_link_append"
     bl_label = "Mass Link/Append"
@@ -1078,7 +1078,7 @@ class MassLinkAppend(Operator, ImportHelper):
 
 
 # Recharger les images affichées dans l'editeur d'images + syncroniser les vues 3D
-class ReloadImage(Operator):      # non utilisée
+class PAINT_OT_ReloadImage(Operator):      # non utilisée
     '''Reload image displayed in image-editor'''
     bl_idname = "paint.reload_image"
     bl_label = "Reload image"
@@ -1099,7 +1099,7 @@ class ReloadImage(Operator):      # non utilisée
 
 
 # Recharge TOUTES LES images de Blender et syncroniser l'editeur d'image et la vue 3D
-class ReloadImages(Operator):
+class PAINT_OT_ReloadImages(Operator):
     '''Reload all images in Blender'''
     bl_idname = "paint.reload_images"
     bl_label = "Reload all images"
@@ -1119,7 +1119,7 @@ class ReloadImages(Operator):
 
 
 # Enregistre les images affichées dans l'Editeur d'Images
-class SaveImage(Operator):
+class PAINT_OT_SaveImage(Operator):
     '''Save image displayed in image-editor'''
     bl_idname = "paint.save_image"
     bl_label = "Save image"
@@ -1138,7 +1138,7 @@ class SaveImage(Operator):
 
 # Enregistrer TOUTES LES images de Blender quelque soit le context
 # Improved function than official "save_dirty()" function
-class SaveImages(Operator):
+class PAINT_OT_SaveImages(Operator):
     '''Save all images'''
     bl_idname = "wm.save_images"
     bl_label = "Save all images"
@@ -1158,7 +1158,7 @@ class SaveImages(Operator):
         return {'FINISHED'}
 
 
-class SaveExtPaintTexture(Operator):
+class PAINT_OT_SaveExtPaintTexture(Operator):
     bl_idname = "object.save_ext_paint_texture"
     bl_label = "Save New Image"
 
@@ -1215,7 +1215,7 @@ class SaveExtPaintTexture(Operator):
 
 ##############################################################################
 # Outil pipette personnalisé en enlevant temporairement les masques!
-class SampleColorMaskOff(Operator):
+class PAINT_OT_SampleColorMaskOff(Operator):
     '''Sample color without mask'''
     bl_idname = "paint.sample_color_custom"
     bl_label = "Sample color"
@@ -1235,7 +1235,7 @@ class SampleColorMaskOff(Operator):
 
 
 # Défilement de la texture peinte de l'objet ou d'une texture UV ou d'une grille couleur
-class GridTexture(Operator):
+class PAINT_OT_GridTexture(Operator):
     '''Toggle between current texture / UV / Colour grids'''    # EXCELLENT CODE !
     bl_idname = "paint.grid_texture"
     bl_label = "Grid texture"
@@ -1302,7 +1302,7 @@ class GridTexture(Operator):
 
 
 # Augmente ou diminue la selection de point/arete/face
-class ChangeSelection(Operator):
+class PAINT_OT_ChangeSelection(Operator):
     '''Select more or less vertices/edges/faces, connected to the original selection'''
     bl_idname = "paint.change_selection"
     bl_label = "Change selection"
@@ -1329,7 +1329,7 @@ class ChangeSelection(Operator):
         return {'FINISHED'}
 
 
-class ToggleToolmodeOnScreen(Operator):
+class PAINT_OT_ToggleToolmodeOnScreen(Operator):
     '''Draw on the screen tools & blend mode'''
     bl_idname = "paint.toolmode_on_screen"
     bl_label = "Draw on screen the blend mode"
@@ -1355,7 +1355,7 @@ class ToggleToolmodeOnScreen(Operator):
 
 
 
-class ToggleAddMultiply(Operator):
+class PAINT_OT_ToggleAddMultiply(Operator):
     '''Toggle between Add and Multiply blend modes'''
     bl_idname = "paint.toggle_add_multiply"
     bl_label = "Toggle add/multiply"
@@ -1385,7 +1385,7 @@ class ToggleAddMultiply(Operator):
         return {"FINISHED"}
 
 
-class ToggleColorSoftLightScreen(Operator):
+class PAINT_OT_ToggleColorSoftLightScreen(Operator):
     '''Toggle between Color and Softlight and Screen blend modes'''
     bl_idname = "paint.toggle_color_soft_light_screen"
     bl_label = "Toggle color-softlight-screen"
@@ -1417,7 +1417,7 @@ class ToggleColorSoftLightScreen(Operator):
         return{'FINISHED'}
 
 
-class ToggleAlphaMode(Operator):
+class PAINT_OT_ToggleAlphaMode(Operator):
     '''Toggle between Add Alpha and Erase Alpha blend modes'''
     bl_idname = "paint.toggle_alpha_mode"
     bl_label = "Toggle alpha mode"
@@ -1449,7 +1449,7 @@ class ToggleAlphaMode(Operator):
 
 
 # init blend mode
-class InitPaintBlend(Operator):
+class PAINT_OT_InitPaintBlend(Operator):
     '''Init to mix paint  mode'''
     bl_idname = "paint.init_blend_mode"
     bl_label = "Init paint blend mode"
@@ -1479,7 +1479,7 @@ class InitPaintBlend(Operator):
 
 #-----------------------------------------------------------# in UV/image editor
 # in UV/Image editor
-class UVSelectSync(Operator):
+class PAINT_OT_UVSelectSync(Operator):
     '''Toggle use_uv_select_sync in the UV editor'''
     bl_idname = "uv.uv_select_sync"
     bl_label = "UV Select Sync"
@@ -1497,7 +1497,7 @@ class UVSelectSync(Operator):
 
 
 # Active par defaut la fusion d'UVs entre iles du mesh in Paint mode
-class AutoMergeUV(Operator):
+class PAINT_OT_AutoMergeUV(Operator):
     '''Have UV Merge enabled by default for merge actions'''
     bl_idname = "paint.auto_merge_uv"
     bl_label = "AutoMerge UV"
@@ -1517,7 +1517,7 @@ class AutoMergeUV(Operator):
 
 
 # in UV/image editor
-class ToggleImagePaint(Operator):
+class PAINT_OT_ToggleImagePaint(Operator):
     '''Toggle image painting in the UV/Image editor'''
     bl_idname = "paint.toggle_image_paint"
     bl_label = "Image Painting"
@@ -1539,7 +1539,7 @@ class ToggleImagePaint(Operator):
 
 #-----------------------------------------------------------#special Image Editor Popup
 
-class DisplayActivePaintSlot(Operator):
+class PAINT_OT_DisplayActivePaintSlot(Operator):
     '''Display selected paint slot in new window'''
     bl_label = "Display active Slot"
     bl_idname = "paint.display_active_slot"
@@ -1579,7 +1579,7 @@ def find_brush(context):                 # Trouver la brosse
         return None
 
 
-class ModifyBrushTextures(Operator):
+class PAINT_OT_ModifyBrushTextures(Operator):
     '''Modify Active Brush Textures in new window'''
     bl_label = "Modify active Brush Texture"
     bl_idname = "paint.modify_brush_textures"
@@ -1701,39 +1701,74 @@ def draw_display_slot_operator(self, context):
 #             CLASSES LIST               #
 #                                        #
 ##########################################
+classes =   [PAINT_OT_BrushPopup,                    #brush panel (W) PAINT
+            PAINT_OT_DisplayActivePaintSlot,         #2d Editor Popup for Active Paint Slot (Shift Alt W) PAINT
+            PAINT_OT_TexturePopup,                   #textures et mask panel (Alt W) PAINT
+            PAINT_OT_ProjectpaintPopup,              #images slots panel (Shift W) PAINT
 
-classes =   [BrushPopup,                    #brush panel (W) PAINT
-            DisplayActivePaintSlot,         #2d Editor Popup for Active Paint Slot (Shift Alt W) PAINT
-            TexturePopup,                   #textures et mask panel (Alt W) PAINT
-            ProjectpaintPopup,              #images slots panel (Shift W) PAINT
+            PAINT_OT_AddDefaultMatDiff,              #add a mat + defauft paint image (Shift ALt X) 3DVIEW
+            PAINT_OT_DefaultMaterial,                #add a mat + 3 textures DIFF/SPEC/NORM (Ctrl Alt X) 3DVIEW
+            PAINT_OT_MakeBrushImageTexture,          #Load a new image as paint texture (panel button)
+            PAINT_OT_MakeBrushImageTextureMask,      #Load a new image as mask paint texture (panel button)
+            PAINT_OT_MassLinkAppend,                 #add several linked objects from .blend folder (Ctrl F1) WINDOW
 
-            AddDefaultMatDiff,              #add a mat + defauft paint image (Shift ALt X) 3DVIEW
-            DefaultMaterial,                #add a mat + 3 textures DIFF/SPEC/NORM (Ctrl Alt X) 3DVIEW
-            MakeBrushImageTexture,          #Load a new image as paint texture (panel button)
-            MakeBrushImageTextureMask,      #Load a new image as mask paint texture (panel button)
-            MassLinkAppend,                 #add several linked objects from .blend folder (Ctrl F1) WINDOW
+            PAINT_OT_ReloadImage,                    #reload active paint image (Alt R ) [IMAGE EDITOR]
+            PAINT_OT_ReloadImages,                   #reload all paint images (Ctrl Alt R) [IMAGE EDITOR]
 
-            ReloadImage,                    #reload active paint image (Alt R ) [IMAGE EDITOR]
-            ReloadImages,                   #reload all paint images (Ctrl Alt R) [IMAGE EDITOR]
+            PAINT_OT_SaveImages,                     #save all paint images (Ctrl Alt S) WINDOW => "save_dirty()" clearer!
+            PAINT_OT_SaveExtPaintTexture,            #save externaly the new image in Cycles (panel button) [PAINT MODE]
 
-            SaveImages,                     #save all paint images (Ctrl Alt S) WINDOW => "save_dirty()" clearer!
-            SaveExtPaintTexture,            #save externaly the new image in Cycles (panel button) [PAINT MODE]
+            PAINT_OT_SampleColorMaskOff,             #Colorsample to paint immediately, different to colorsample S (OS + clic droit) PAINT
+            PAINT_OT_GridTexture,                    #Toggle between paint image, UV image and grid image (G) PAINT [BI]
+            PAINT_OT_ChangeSelection,                #Augmenter/diminuer les selections (alt + / alt -) [PAINT MODE] 3Dview
 
-            SampleColorMaskOff,             #Colorsample to paint immediately, different to colorsample S (OS + clic droit) PAINT
-            GridTexture,                    #Toggle between paint image, UV image and grid image (G) PAINT [BI]
-            ChangeSelection,                #Augmenter/diminuer les selections (alt + / alt -) [PAINT MODE] 3Dview
+            PAINT_OT_ToggleToolmodeOnScreen,         #Toggle display the toolsmode options (Shift M) PAINT
+            PAINT_OT_ToggleAddMultiply,              #Toggle Add/Multiply paint mode (D) PAINT
+            PAINT_OT_ToggleColorSoftLightScreen,     #Toggle Color*softlight paint mode (shift D) PAINT
+            PAINT_OT_ToggleAlphaMode,                #Toggle AddAlpha/EraseAlpha paint mode (A) PAINT
+            PAINT_OT_InitPaintBlend,                 #Re-init default mix paint mode (Alt D) PAINT
 
-            ToggleToolmodeOnScreen,         #Toggle display the toolsmode options (Shift M) PAINT
-            ToggleAddMultiply,              #Toggle Add/Multiply paint mode (D) PAINT
-            ToggleColorSoftLightScreen,     #Toggle Color*softlight paint mode (shift D) PAINT
-            ToggleAlphaMode,                #Toggle AddAlpha/EraseAlpha paint mode (A) PAINT
-            InitPaintBlend,                 #Re-init default mix paint mode (Alt D) PAINT
-
-            SaveImage,                      #save paint image (ALt S) [IMAGE EDITOR]
-            UVSelectSync,             #Toggle the UVsync property ( Alt I ) UV_EDITOR
-            AutoMergeUV,                    #UI > Menu Mesh  => "Automerge uv" [Shift I) [PAINT MODE]
-            ToggleImagePaint]               #Cyclic image/paint/mask  mode (B) IMAGE_EDITOR
+            PAINT_OT_SaveImage,                      #save paint image (ALt S) [IMAGE EDITOR]
+            PAINT_OT_UVSelectSync,             #Toggle the UVsync property ( Alt I ) UV_EDITOR
+            PAINT_OT_AutoMergeUV,                    #UI > Menu Mesh  => "Automerge uv" [Shift I) [PAINT MODE]
+            PAINT_OT_ToggleImagePaint]               #Cyclic image/paint/mask  mode (B) IMAGE_EDITOR
                                             # Toggle "Use mipmaps" ( Y ) [PAINT MODE] 3Dview
+
+classes = (
+            PAINT_OT_BrushPopup,
+            PAINT_OT_DisplayActivePaintSlot,
+            PAINT_OT_TexturePopup,
+            PAINT_OT_ProjectpaintPopup,
+
+            PAINT_OT_AddDefaultMatDiff,
+            PAINT_OT_DefaultMaterial,
+            PAINT_OT_MakeBrushImageTexture,
+            PAINT_OT_MakeBrushImageTextureMask,
+            PAINT_OT_MassLinkAppend,
+
+            PAINT_OT_ReloadImage,
+            PAINT_OT_ReloadImages,
+
+            PAINT_OT_SaveImages,
+            PAINT_OT_SaveExtPaintTexture,
+
+            PAINT_OT_SampleColorMaskOff,
+            PAINT_OT_GridTexture,
+            PAINT_OT_ChangeSelection,
+
+            PAINT_OT_ToggleToolmodeOnScreen,
+            PAINT_OT_ToggleAddMultiply,
+            PAINT_OT_ToggleColorSoftLightScreen,
+            PAINT_OT_ToggleAlphaMode,
+            PAINT_OT_InitPaintBlend,
+
+            PAINT_OT_SaveImage,
+            PAINT_OT_UVSelectSync,
+            PAINT_OT_AutoMergeUV,
+            PAINT_OT_ToggleImagePaint
+)
+
+
 #legend:
 #(--) =  No shortcut!
 
@@ -1810,9 +1845,12 @@ def Register_Shortcuts():
 #                                        #
 ##########################################
 
+
 def register():
     init_temp_props()
-    bpy.utils.register_module(__name__)
+    from bpy.utils import register_class
+    for cls in classes:
+        register_class(cls)
 
     # keymaps
     Register_Shortcuts()
@@ -1824,9 +1862,11 @@ def register():
     bpy.types.VIEW3D_MT_snap.append(menu_snap)
     bpy.types.VIEW3D_PT_slots_projectpaint.prepend(draw_display_slot_operator)
 
-
 def unregister():
     remove_temp_props()
+    from bpy.utils import unregister_class
+    for cls in reversed(classes):
+        unregister_class(cls)
 
     # keymaps
     for km, kmi in addon_keymaps:
@@ -1841,7 +1881,7 @@ def unregister():
     bpy.types.IMAGE_PT_image_properties.remove(image_panel)
 
     # Remove module
-    bpy.utils.unregister_module(__name__)
 
-if __name__ == "__main__":
+
+if __name__ == '__main__':
     register()
