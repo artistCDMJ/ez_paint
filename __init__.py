@@ -625,7 +625,7 @@ class PAINT_OT_TexturePopup(Operator):
 
             if brush.texture:
                 row = layout.row(align=True)
-                row.operator("paint.modify_brush_textures", text="Modify brush Texture", icon='IMAGE_COL').toggleType=True
+                row.operator("paint.modify_brush_textures", text="Modify brush Texture", icon='ADD').toggleType: True
 
             layout.label(text="Brush Mapping:")
 
@@ -667,7 +667,7 @@ class PAINT_OT_TexturePopup(Operator):
 
             if brush.mask_texture:
                 row = layout.row(align=True)
-                row.operator("paint.modify_brush_textures", text="Modify brush Texture", icon='IMAGE_COL').toggleType=False
+                row.operator("paint.modify_brush_textures", text="Modify brush Texture", icon='ADD').toggleType: False
 
             layout.label(text="Mask Mapping:")
             # map_mode
@@ -760,8 +760,8 @@ class PAINT_OT_ProjectpaintPopup(Operator):
         row.template_list("MESH_UL_vgroups", "", ob, "vertex_groups", ob.vertex_groups, "active_index", rows=rows)
 
         col = row.column(align=True)
-        col.operator("object.vertex_group_add", icon='ZOOMIN', text="")
-        col.operator("object.vertex_group_remove", icon='ZOOMOUT', text="").all = False
+        col.operator("object.vertex_group_add", icon='ADD', text="")
+        col.operator("object.vertex_group_remove", icon='REMOVE', text="").all = False
         col.menu("MESH_MT_vertex_group_specials", icon='DOWNARROW_HLT', text="")
 
 
@@ -1585,7 +1585,7 @@ class PAINT_OT_ModifyBrushTextures(Operator):
     bl_idname = "paint.modify_brush_textures"
     bl_options = {'REGISTER', 'UNDO'}
 
-    toggleType = bpy.props.BoolProperty(default=True)  # toogle texture or Mask menu
+    toggleType: bpy.props.BoolProperty(default=True)  # toogle texture or Mask menu
 
     @classmethod
     def poll(cls, context):
@@ -1661,21 +1661,21 @@ def menu_mesh_select_mode(self, context):
     layout.separator()
 
     prop = layout.operator("wm.context_set_value", text="Vertex + Edge", icon='EDITMODE_HLT')
-    prop.value = "(True, True, False)"
+    prop.value: "(True, True, False)"
     prop.data_path = "tool_settings.mesh_select_mode"
 
     prop = layout.operator("wm.context_set_value", text="Vertex + Face", icon='ORTHO')
-    prop.value = "(True, False, True)"
+    prop.value: "(True, False, True)"
     prop.data_path = "tool_settings.mesh_select_mode"
 
     prop = layout.operator("wm.context_set_value", text="Edge + Face", icon='SNAP_FACE')
-    prop.value = "(False, True, True)"
+    prop.value: "(False, True, True)"
     prop.data_path = "tool_settings.mesh_select_mode"
 
     layout.separator()
 
     prop = layout.operator("wm.context_set_value", text="All", icon='OBJECT_DATAMODE')
-    prop.value = "(True, True, True)"
+    prop.value: "(True, True, True)"
     prop.data_path = "tool_settings.mesh_select_mode"
 
 
@@ -1693,7 +1693,7 @@ def draw_display_slot_operator(self, context):
     if context.object.active_material.texture_paint_images:
         layout = self.layout
         row = layout.row(align=True)
-        row.operator("paint.display_active_slot", text="UV Texture Editor", icon='IMAGE_COL')
+        row.operator("paint.display_active_slot", text="UV Texture Editor", icon='ADD')
 
 
 ##########################################
@@ -1885,3 +1885,13 @@ def unregister():
 
 if __name__ == '__main__':
     register()
+
+
+"""def orientation_helper(axis_forward='Y', axis_up='Z'):
+    def wrapper(cls):
+        # Without that, we may end up adding those fields to some **parent** class' __annotations__ property
+        # (like the ImportHelper or ExportHelper ones)! See T58772.
+        if "__annotations__" not in cls.__dict__:
+            setattr(cls, "__annotations__", {})
+
+        cls.__annotations__['axis_forward'] = StringProperty()"""
