@@ -586,7 +586,7 @@ class PAINT_OT_TexturePopup(Operator):
     COMPAT_ENGINES = {'BLENDER_RENDER', 'CYCLES'}
     bl_options = {'REGISTER', 'UNDO'}
 
-    toggleMenu = bpy.props.BoolProperty(default=True)  # toogle texture or Mask menu
+    toggleMenu: bpy.props.BoolProperty(default=True)  # toogle texture or Mask menu
 
     def check(self, context):
         return True
@@ -928,7 +928,7 @@ class PAINT_OT_MakeBrushImageTexture(Operator):
     bl_label = "New Texture from Image"
     bl_idname = "gizmo.image_texture"
 
-    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -963,7 +963,7 @@ class PAINT_OT_MakeBrushImageTextureMask(Operator):
     bl_label = "New Mask Texture from Image"
     bl_idname = "gizmo.image_texture_mask"
 
-    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
 
     def invoke(self, context, event):
         context.window_manager.fileselect_add(self)
@@ -1000,33 +1000,33 @@ class PAINT_OT_MakeBrushImageTextureMask(Operator):
 
 
 # Importer en même temps tous les objets de plusieurs [fichiers .blend étant dans un dossier]!
-class PAINT_OT_MassLinkAppend(Operator, ImportHelper):
+class PAINT_OT_MassLinkAppend(Operator, ImportHelper): #made changes here craigo
     '''Import objects from multiple blend-files at the same time'''
     bl_idname = "wm.mass_link_append"
     bl_label = "Mass Link/Append"
     bl_options = {'REGISTER', 'UNDO'}
 
-    active_layer = bpy.props.BoolProperty(name="Active Layer",
-            default=True,
+    active_layer : bpy.props.BoolProperty(name="Active Layer",
+            default = True,
             description="Put the linked objects on the active layer"
     )
 
-    autoselect = bpy.props.BoolProperty(name="Select",
-            default=True,
+    autoselect : bpy.props.BoolProperty(name="Select",
+            default= True,
             description="Select the linked objects"
     )
 
-    instance_groups = bpy.props.BoolProperty(name="Instance Groups",
-            default=False,
+    instance_groups: bpy.props.BoolProperty(name="Instance Groups",
+            default= False,
             description="Create instances for each group as a DupliGroup"
     )
 
-    link = bpy.props.BoolProperty(name="Link",
+    link: bpy.props.BoolProperty(name="Link",
             default=False,
-            description="Link the objects or datablocks rather than appending"
+            description = "Link the objects or datablocks rather than appending"
     )
 
-    relative_path = bpy.props.BoolProperty(name="Relative Path",
+    relative_path: bpy.props.BoolProperty(name="Relative Path",
             default=True,
             description="Select the file relative to the blend file"
     )
@@ -1162,9 +1162,9 @@ class PAINT_OT_SaveExtPaintTexture(Operator):
     bl_idname = "object.save_ext_paint_texture"
     bl_label = "Save New Image"
 
-    filepath = bpy.props.StringProperty(subtype="FILE_PATH")
-    filename = bpy.props.StringProperty(subtype="FILE_NAME")
-    directory = bpy.props.StringProperty(subtype="DIR_PATH")
+    filepath: bpy.props.StringProperty(subtype="FILE_PATH")
+    filename: bpy.props.StringProperty(subtype="FILE_NAME")
+    directory: bpy.props.StringProperty(subtype="DIR_PATH")
 
     @classmethod
     def poll(cls, context):
@@ -1308,7 +1308,7 @@ class PAINT_OT_ChangeSelection(Operator):
     bl_label = "Change selection"
 
     # propriété du mode +/- de selection
-    mode = bpy.props.EnumProperty(name="Mode",
+    mode: bpy.props.EnumProperty(name="Mode",
                                   items = (("more", "More", "Select more vertices/edges/faces"),
                                            ("less", "Less", "Select less vertices/edges/faces")),
                                   description = "Choose whether the selection should be increased or decreased",
