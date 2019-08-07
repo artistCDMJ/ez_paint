@@ -217,7 +217,7 @@ class  PAINT_OT_BrushPopup(Operator):
     """Brush popup"""
     bl_idname = "view3d.brush_popup"
     bl_label = "Brush settings"
-    COMPAT_ENGINES = {'BLENDER_RENDER', 'CYCLES'}
+    COMPAT_ENGINES = {'EEVEE', 'CYCLES'}
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -301,13 +301,13 @@ class  PAINT_OT_BrushPopup(Operator):
 
         if brush.image_tool in {'DRAW', 'FILL'}:
             if brush.blend not in {'ERASE_ALPHA', 'ADD_ALPHA'}:
-                if not brush.use_gradient:
+                if not brush.color_type == 'GRADIENT':
                     self.prop_unified_color_picker(col, context, brush, "color", value_slider=True)
 
                 if settings.palette:
                     col.template_palette(settings, "palette", color=True)
 
-                if brush.use_gradient:
+                if brush.color_type =='GRADIENT':
                     col.label("Gradient Colors")
                     col.template_color_ramp(brush, "gradient", expand=True)
 
