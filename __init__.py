@@ -464,8 +464,8 @@ class  PAINT_OT_BrushPopup(Operator):
                 col.separator()
 
                 row = col.row(align=True)
-                row.prop(brush, "use_relative_jitter", icon_only=True)
-                if brush.use_relative_jitter:
+                row.prop(brush, "use_pressure_jitter", icon_only=True)
+                if brush.use_pressure_jitter:
                     row.prop(brush, "jitter", slider=True)
                 else:
                     row.prop(brush, "jitter_absolute")
