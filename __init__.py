@@ -784,7 +784,33 @@ class PAINT_OT_ProjectpaintPopup(Operator):
 
             layout.prop(context.tool_settings, "vertex_group_weight", text="Weight")
 
-
+'''
+class D2P_OT_DisplayActivePaintSlot(bpy.types.Operator):
+    '''Dispaly selected paint slot in new window'''
+    bl_label = "Display active Slot"
+    bl_idname = "d2p.display_active_slot"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    @classmethod
+    def poll(self, context):
+        return context.object.active_material.texture_paint_images
+    
+    def execute(self, context):
+        if context.object.active_material.texture_paint_images:
+                # Get the Image
+            mat = bpy.context.object.active_material
+            image = mat.texture_paint_images[mat.paint_active_slot]
+                # Call user prefs window
+            bpy.ops.screen.userpref_show('INVOKE_DEFAULT')
+                # Change area type
+            area = context.window_manager.windows[-1].screen.areas[0]
+            area.type = 'IMAGE_EDITOR'
+                # Assign the Image
+            context.area.spaces.active.image = image
+            context.space_data.mode = 'PAINT'
+        else:
+            self.report({'INFO'}, "No active Slot")
+        return {'FINISHED'}'''
         #--------------------------------------------------------------Mat Paint
         if context.mode == 'PAINT_TEXTURE':
             col = layout.column()
