@@ -392,8 +392,8 @@ class  PAINT_OT_BrushPopup(Operator):
 
         row = col.row(align=True)
 
-        if capabilities.has_space_attenuation:
-            row.prop(brush, "use_space_attenuation", toggle=True, icon_only=True)
+        #if capabilities.has_space_attenuation:
+            #row.prop(brush, "use_space_attenuation", toggle=True, icon_only=True)
 
         self.prop_unified_strength(row, context, brush, "strength", text="Strength")
         self.prop_unified_strength(row, context, brush, "use_pressure_strength")
@@ -630,7 +630,8 @@ class PAINT_OT_TexturePopup(Operator):
             layout.label(text="Brush Mapping:")
 
             # texture_map_mode
-            layout.row().prop(tex_slot, "tex_paint_map_mode", text="")
+            layout.row().prop(tex_slot, "map_mode", text="")
+            #layout.prop(tex_slot, "map_mode", text="Mapping")
             layout.separator()
 
             if tex_slot.map_mode == 'STENCIL':
@@ -659,7 +660,7 @@ class PAINT_OT_TexturePopup(Operator):
             split.prop(tex_slot, "scale")
 
             row = layout.row()
-            row.operator(MakeBrushImageTexture.bl_idname)
+            row.operator(PAINT_OT_MakeBrushImageTexture.bl_idname)
         else:
             col = layout.column()                                 #MASK TEXTURE
             col.template_ID_preview(brush, "mask_texture", new="texture.new", \
@@ -699,7 +700,7 @@ class PAINT_OT_TexturePopup(Operator):
             split.prop(mask_tex_slot, "offset")
             split.prop(mask_tex_slot, "scale")
             row = layout.row()
-            row.operator(MakeBrushImageTextureMask.bl_idname)
+            row.operator(PAINT_OT_MakeBrushImageTextureMask.bl_idname)
 
 
     def invoke(self, context, event):
@@ -787,20 +788,20 @@ class PAINT_OT_ProjectpaintPopup(Operator):
         #--------------------------------------------------------------Mat Paint
         if context.mode == 'PAINT_TEXTURE':
             col = layout.column()
-            col.label("Painting Mode")
+            col.label(text="Painting Mode")
             col.prop(settings, "mode", text="")
             col.separator()
 
             if settings.mode == 'MATERIAL':
                 if len(ob.material_slots) > 1:
-                    col.label("Materials")
+                    col.label(text="Materials")
                     col.template_list("MATERIAL_UL_matslots", "layers",
                                       ob, "material_slots",
                                       ob, "active_material_index", rows=2)
 
                 mat = ob.active_material
                 if mat:
-                    col.label("Available Paint Slots")
+                    col.label(text="Available Paint Slots")
                     col.template_list("TEXTURE_UL_texpaintslots", "",
                                       mat, "texture_paint_images",
                                       mat, "paint_active_slot", rows=2)
@@ -826,10 +827,10 @@ class PAINT_OT_ProjectpaintPopup(Operator):
             elif settings.mode == 'IMAGE':
                 mesh = ob.data
                 uv_text = mesh.uv_textures.active.name if mesh.uv_textures.active else ""
-                col.label("Canvas Image")
+                col.label(text="Canvas Image")
                 col.template_ID(settings, "canvas")
                 col.operator("image.new", text="New").gen_context = 'PAINT_CANVAS'
-                col.label("UV Map")
+                col.label(text="UV Map")
                 col.menu("VIEW3D_MT_tools_projectpaint_uvlayer", text=uv_text, translate=False)
 
             col.separator()
